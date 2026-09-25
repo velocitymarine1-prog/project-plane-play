@@ -28,7 +28,7 @@ const G = LEVEL.gauge, ST = stage(), look0 = LEVEL.scenes[0].look;
 /* ───────────── the world, the engine, the lettering ───────────── */
 const world = new ComicWorld(Object.assign({ name: 'plane' }, look0));
 const canvas = document.getElementById('c');
-const kitHud = mountHUD({ ink: HOUSE.ink, paper: HOUSE.stock, accent: HOUSE.magenta, capBg: HOUSE.yellow, capText: HOUSE.ink, caption: LEVEL.caption, name: LEVEL.room, role: `${LEVEL.length} m to the fence line, in one throw`, hint: '', counterLabel: 'THROW' });
+const kitHud = mountHUD({ ink: HOUSE.ink, paper: HOUSE.stock, accent: HOUSE.magenta, capBg: HOUSE.yellow, capText: HOUSE.ink, caption: LEVEL.caption, name: LEVEL.room, role: '', hint: '', counterLabel: 'THROW' });   // pass 6: the kit's caption, name card and counter stay hidden; the page keeps one slot
 kitHud.boostBtn.hidden = true;
 const hud = mountGameHUD(kitHud);
 const dprMax = Q.dpr || Math.min(coarse ? 1.5 : 2, devicePixelRatio || 1); let dpr = dprMax;
@@ -50,7 +50,7 @@ const marks = EXTRA.bonkMarks(K0); inkAll(marks, hullMat, 62); scene.add(marks);
 const slices = [0, 1].map(i => { const t = EXTRA.toast(KK); inkAll(t, hullMat, 63 + i); t.visible = false; scene.add(t); return t; });
 const crumbs = EXTRA.puffBurst(K0, { color: mix(HOUSE.yellow, HOUSE.ink, 0.35), n: 9, r: 0.022, gravity: 4, life: 0.6, seed: 31 }); scene.add(crumbs);
 const drips = EXTRA.puffBurst(K0, { color: mix(HOUSE.cyan, HOUSE.stock, 0.4), n: 12, r: 0.028, gravity: 6, life: 0.55, seed: 32 }); scene.add(drips);
-const soot = EXTRA.puffBurst(K0, { n: 18, r: 0.045, gravity: -0.6, life: 0.9, grow: 1.6, seed: 33 }); scene.add(soot);
+const soot = EXTRA.puffBurst(K0, { n: 18, r: 0.026, gravity: -0.5, life: 0.8, grow: 1.2, seed: 33, soot: true }); scene.add(soot);
 const fxPieces = [hand, fan, marks, ...slices, crumbs, drips, soot];
 let pennant = null;
 function placePennant(best) {
@@ -81,6 +81,7 @@ if (QS.has('card')) { const [a, p] = QS.get('card').split(',').map(Number); P.ar
 if (QS.has('cash')) P.cash = Math.max(0, +QS.get('cash') || 0);
 let twos = Q.twos == null ? (P.twos ?? 1) : Q.twos; engine.twos = twos; kitHud.setTwos(TWOS_LABELS[twos]);
 let hidden = !Q.hud, flash = 0, paused = false, handT = -9, squashT = -9, slicesLanded = [false, false];
+const DEBUG = QS.get('debug') === '1';
 const S = { mode: 'boot', x: 0.2, yaw: 0, loftI: 2, speed: 5.5, locked: false, pullBack: 0, dragging: false, run: null, tp: 0, fired: 0, reached: 0, crossed: 0, endT: 0, endPhase: 0, endInfo: null, pay: null,
   fwd: new THREE.Vector3(0, 0, -1), bank: 0, sBank: 0, tumble: 0, throws: P.runs, lastThrow: null, sootUntil: -1, dripsUntil: -1 };
 const stats = { avgMs: 0 };
@@ -92,13 +93,13 @@ const handPoint = () => new THREE.Vector3(S.x, LEVEL.launch.y, LEVEL.launch.z);
 const aimDir = (yawDeg, loftDeg) => { const y = yawDeg * Math.PI / 180, p = loftDeg * Math.PI / 180; return new THREE.Vector3(Math.sin(y) * Math.cos(p), Math.sin(p), -Math.cos(y) * Math.cos(p)); };
 function poseOnHand() {
   const h = handPoint(), d = aimDir(S.yaw, G.lofts[S.loftI]);
-  plane.position.copy(h).add(new THREE.Vector3(0, -0.02 * Math.min(1, S.pullBack), 0.38 * Math.min(1, S.pullBack))); plane.lookAt(plane.position.clone().sub(d)); plane.rotation.z = 0;
-  hand.position.copy(plane.position).add(new THREE.Vector3(0.0, -0.062, 0.03)); hand.rotation.y = -S.yaw * Math.PI / 180;
+  plane.position.copy(h).add(new THREE.Vector3(0, -0.02 * Math.min(1, S.pullBack), 0.3 * Math.min(1, S.pullBack))); plane.lookAt(plane.position.clone().sub(d)); plane.rotation.z = 0;
+  hand.position.copy(plane.position); hand.rotation.y = -S.yaw * Math.PI / 180;
   fan.position.copy(handPoint()); fan.rotation.y = -S.yaw * Math.PI / 180; fan.userData.set(S.loftI);
 }
 const cap = () => cardNow(P).cap;
-function refreshGauge(text) { const c = cap(); S.speed = Math.min(S.speed, c); hud.gauge({ speed: S.speed, cap: c, locked: S.locked, text: text || (S.mode === 'aim' ? (S.locked ? 'LOCKED · ' + c.toFixed(1) : S.speed.toFixed(2) + ' m/s') : coarse ? 'DRAG BACK · SWIPE' : 'SPACE · THROW') }); }
-function refreshReadout() { const l = G.lofts[S.loftI]; hud.readout(`${hud.small() ? '' : ''}yaw ${S.yaw >= 0 ? '+' : ''}${S.yaw.toFixed(0)}° · loft ${l >= 0 ? '+' : ''}${l}° · ${S.speed.toFixed(2)} m/s · x ${S.x.toFixed(2)}`); }
+function refreshGauge() { const c = cap(); S.speed = Math.min(S.speed, c); }
+function refreshReadout() { if (DEBUG) console.log(`yaw ${S.yaw.toFixed(0)}° · loft ${G.lofts[S.loftI]}° · ${S.speed.toFixed(2)} m/s · x ${S.x.toFixed(2)}${S.locked ? ' · LOCKED' : ''}`); }
 function previewDots() {
   if (S.mode !== 'aim' && S.mode !== 'start') { preview.count = 0; preview.instanceMatrix.needsUpdate = true; return; }
   const c = cardNow(P); const r = simulate(ST, { x: S.x, yaw: S.yaw, loft: G.lofts[S.loftI], power: (S.speed - G.min) / (c.cap - G.min) }, c);
@@ -108,7 +109,7 @@ function previewDots() {
 /* ───────────── the throw and the flight ───────────── */
 function throwPlane(L) {
   const card = cardNow(P); const r = simulate(ST, L, card); S.run = r; S.lastThrow = L; S.tp = 0; S.fired = 0; S.reached = 0; S.crossed = 0; S.mode = 'flight'; S.throws++; S.sootUntil = -1; S.dripsUntil = -1; S.tumble = 0;
-  hud.showCards(false); hud.hint(false); hud.panel(null); S.speed = G.min + (card.cap - G.min) * L.power; refreshGauge('THWIP!'); refreshReadout();
+  hud.showCards(false); hud.hint(false); hud.panel(null); S.speed = G.min + (card.cap - G.min) * L.power; refreshReadout(); hud.metres(0);
   const p = planeScreen(); sfx('THWIP!', p.x - 30, p.y - 80, 3);
   hand.userData.set(1); handT = clock.t; fan.visible = false; preview.count = 0; preview.instanceMatrix.needsUpdate = true;
   for (const s of slices) s.visible = false; slicesLanded = [false, false]; if (W.extras.toaster) W.extras.toaster.userData.arm(false);
@@ -128,7 +129,7 @@ function fireEvent(e) {
 }
 function cutTo(i) {
   const cp = LEVEL.checkpoints[i]; const next = LEVEL.scenes.find(s => s.key === (cp.key === 'pond' ? 'backyard' : LEVEL.scenes[LEVEL.scenes.findIndex(s2 => s2.key === cp.key) + 1].key));
-  if (next && next.look) applyLook(next.look); hud.caption(cp.caption); hud.room(cp.cut, cp.note); const p = planeScreen(); sfx(cp.letter, p.x + 40, p.y - 130, 4);
+  if (next && next.look) applyLook(next.look); const p = planeScreen(); sfx(cp.letter, p.x + 40, p.y - 130, 4);
   if (i === 0 && W.extras.toaster) W.extras.toaster.userData.arm(true);   // the toaster hears you coming: its slots glow after the hall
 }
 function endFlight() {
@@ -142,12 +143,12 @@ function payOut() {
   for (const f of pay.firsts) lines.push(`<span class="line first">${f.text}</span>`);
   if (pay.finishBonus) lines.push(`<span class="line first">THE HOUSE IN ONE: +$${pay.finishBonus}</span>`);
   if (pay.record && d > 0) { lines.push(`<span class="line rec">NEW RECORD!</span>`); placePennant(P.best); if (pennant) pennant.userData.hop(clock.t12); const p = planeScreen(); sfx('NEW RECORD!', p.x, p.y - 150, 3); }
-  hud.panel(lines.join('')); hud.strip(0, P.best);
+  hud.panel(lines.join('')); hud.best(P.best);
 }
 function startLine() {
   hud.panel(null); S.mode = 'start'; S.pullBack = 0; S.locked = false; S.dragging = false; fan.visible = true; hand.visible = true; hand.userData.set(0);
-  applyLook(look0); hud.caption(LEVEL.caption); hud.room(LEVEL.room, `${LEVEL.length} m to the fence line, in one throw`); hud.counter(`THROW ${S.throws + 1}`);
-  hud.cards(cards(P), onBuy); hud.showCards(true); hud.hint((P.runs === 0 && !Q.shot) || QS.get('hint') === '1'); hud.strip(0, P.best); drone.init = false; refreshGauge(); refreshReadout(); previewDots();
+  applyLook(look0); hud.best(P.best);
+  hud.cards(cards(P), onBuy); hud.showCards(true); hud.hint((P.runs === 0 && !Q.shot) || QS.get('hint') === '1'); drone.init = false; refreshGauge(); refreshReadout(); previewDots();
 }
 function finishCard() {
   hud.panel(`<b>THE HOUSE IN ONE!</b><span class="line">throw ${P.runs} · ${LEVEL.length} m in one throw${P.firstFinishRun && P.firstFinishRun < P.runs ? ` · first on throw ${P.firstFinishRun}` : ''}</span>${S.pay && S.pay.finishBonus ? `<span class="line first">+$${S.pay.finishBonus}</span>` : ''}<span class="tap">TAP TO KEEP THROWING</span>`);
@@ -162,11 +163,11 @@ function onBuy(key) {
 /* ───────────── input: the gesture, the keyboard, the buttons ───────────── */
 const gesture = attachGesture(canvas, G, {
   cap, canStart: e => (S.mode === 'start') && e.target === canvas && e.clientY > innerHeight * 0.28 && !paused,
-  onStart() { S.mode = 'aim'; S.dragging = true; hud.showCards(false); hud.hint(false); S.pullBack = 0; refreshGauge(); },
-  onMove(live) { S.speed = live.speed; S.locked = live.locked; S.yaw = live.yaw; S.pullBack = live.back / live.pull.full; if (live.rising) S.loftI = live.loftIndex; refreshGauge(); refreshReadout(); previewDots(); },
+  onStart() { S.mode = 'aim'; S.dragging = true; hud.showCards(false); hud.hint(false); S.pullBack = 0; },
+  onMove(live) { S.speed = live.speed; S.locked = live.locked; S.yaw = live.yaw; S.pullBack = Math.min(live.back / live.pull.full, (cap() - G.min) / (G.max - G.min)); if (live.rising) S.loftI = live.loftIndex; previewDots(); },
   onEnd(d) { S.dragging = false; S.lastDecision = d; if (S.mode !== 'aim') return;
     if (d.action === 'throw') { S.yaw = d.yaw; S.loftI = d.loftIndex; S.speed = d.speed; throwPlane({ x: S.x, yaw: d.yaw, loft: d.loft, power: d.power }); }
-    else { S.pullBack = 0; S.locked = false; const p = planeScreen(); if (d.reason !== 'a tap') sfx('…', p.x, p.y - 60, 1); S.mode = 'start'; hud.showCards(true); refreshGauge(); refreshReadout(); previewDots(); } },
+    else { S.pullBack = 0; S.locked = false; const p = planeScreen(); if (d.reason !== 'a tap') sfx('…', p.x, p.y - 60, 1); S.mode = 'start'; hud.showCards(true); previewDots(); } },
 });
 canvas.addEventListener('pointerdown', e => { if (S.mode === 'finish') { startLine(); e.preventDefault(); } });
 const keys = {};
@@ -191,8 +192,6 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; keys[k] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
-hud.els.stepL.addEventListener('click', () => { if (S.mode !== 'start') return; S.x = Math.max(LEVEL.launch.x[0], +(S.x - G.step).toFixed(2)); refreshReadout(); previewDots(); });
-hud.els.stepR.addEventListener('click', () => { if (S.mode !== 'start') return; S.x = Math.min(LEVEL.launch.x[1], +(S.x + G.step).toFixed(2)); refreshReadout(); previewDots(); });
 /* pause: twos, reset (hold 2 s), the frame rate, storage */
 function openPause() { if (paused) return; paused = true; hud.pause(true); document.getElementById('twosBtn').textContent = TWOS_LABELS[twos]; }
 function closePause() { paused = false; hud.pause(false); resetHold = null; document.getElementById('resetBtn').classList.remove('armed'); document.getElementById('resetBtn').querySelector('i').style.width = '0%'; }
@@ -247,7 +246,7 @@ function simulateFrame(dt) {
     while (S.fired < S.run.events.length && S.run.events[S.fired].t <= S.tp) fireEvent(S.run.events[S.fired++]);
     if (S.run.popped && S.tp >= S.run.tPop) { const tau = S.tp - S.run.tPop; toastAt(tau).forEach((s, n) => { const m = slices[n]; if (s.air) { m.visible = true; m.position.set(s.x, s.y, s.z); m.userData.spin = n ? 0.9 : 0.35; }
       else if (m.visible && !slicesLanded[n]) { slicesLanded[n] = true; const onCounter = s.x > -1.4 && s.x < 1.2 && s.z > LEVEL.place.kitchen + 0.45 && s.z < LEVEL.place.kitchen + 1.45; m.position.set(s.x, (onCounter ? 0.94 : 0) + 0.008, s.z); m.userData.spin = 0; m.rotation.set(Math.PI / 2, 0, 0.4 * n); } }); }
-    const d = LEVEL.launch.z - plane.position.z; if (d > S.reached) S.reached = d; hud.counter(`${Math.max(0, S.reached).toFixed(1)} m`); hud.strip(Math.max(0, d), P.best);
+    const d = LEVEL.launch.z - plane.position.z; if (d > S.reached) S.reached = d; hud.metres(S.reached);
     while (S.crossed < LEVEL.checkpoints.length && S.reached >= LEVEL.checkpoints[S.crossed].at) cutTo(S.crossed++);
     if (clock.stepped) { if (S.tp < S.sootUntil) soot.userData.burst(plane.position.clone().add(new THREE.Vector3(0, 0.02, 0.15)), t12, 1, 0.2); if (S.tp < S.dripsUntil && f % 3 === 0) drips.userData.burst(plane.position.clone(), t12, 1, 0.4); }
     if (fi >= Pth.length - 1) endFlight();
@@ -280,7 +279,7 @@ hud.hide(hidden); if (Q.shot && !Q.hud) hud.hide(true); if (Q.shot) document.bod
 startLine();
 if (QS.get('launch')) { const [x, yaw, loft, v] = QS.get('launch').split(',').map(Number); const c = cap(); S.x = Math.min(LEVEL.launch.x[1], Math.max(LEVEL.launch.x[0], x || 0)); const li = Math.max(0, G.lofts.indexOf(loft)); S.loftI = li; S.yaw = yaw || 0; S.speed = Math.min(c, Math.max(G.min, v || 6)); throwPlane({ x: S.x, yaw: S.yaw, loft: G.lofts[li], power: (S.speed - G.min) / (c - G.min) }); }
 const SCREEN = QS.get('screen');
-if (SCREEN === 'aim') { S.mode = 'aim'; hud.showCards(false); hud.hint(false); const p = readPull(-QS.has('pull') ? 0 : 0, 0, 1, cap(), G); S.pullBack = 0.62; S.yaw = -4; S.loftI = 3; S.speed = Math.min(cap(), G.min + (G.max - G.min) * 0.62); S.locked = G.min + (G.max - G.min) * 0.62 > cap(); refreshGauge(); refreshReadout(); previewDots(); void p; }
+if (SCREEN === 'aim') { S.mode = 'aim'; hud.showCards(false); hud.hint(false); S.pullBack = Math.min(0.62, (cap() - G.min) / (G.max - G.min)); S.yaw = -4; S.loftI = 3; S.speed = Math.min(cap(), G.min + (G.max - G.min) * 0.62); S.locked = G.min + (G.max - G.min) * 0.62 > cap(); previewDots(); }
 if (SCREEN === 'pay' || SCREEN === 'finish') { const c = cardNow(P); const fin = SCREEN === 'finish'; throwPlane(fin ? { x: 0, yaw: 5, loft: 14, power: (6.5 - G.min) / (c.cap - G.min) } : { x: 0.6, yaw: 2, loft: 26, power: 1 }); while (S.mode === 'flight') { clock.fixed(1 / 60); simulateFrame(1 / 60); } S.endT = 1; simulateFrame(0); if (fin) finishCard(); }
 if (SCREEN === 'pause') openPause();
 if (Q.shot) { const n = Math.round(Q.t * 60); for (let i = 0; i < n; i++) { clock.fixed(1 / 60); simulateFrame(1 / 60); } }

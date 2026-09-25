@@ -7,11 +7,12 @@
  * Nothing in kit/ is edited: EXTRA is the game's own table beside PIECE.
  */
 import { THREE, ComicMaterial, canvasTexture, mix, shade, rng, mulberry32 } from '../kit/comic3d.js';
-import { slab, slabB, cushion, rod, drum, ring, puff, cutout, dash, glowDrum, glare, bent } from '../kit/parts.js';
+import { slab, slabB, cushion, rod, drum, ring, puff, cutout, dash, glowDrum, glare, bent, PIECE } from '../kit/parts.js';
 
 const TAU = Math.PI * 2;
 const unlit = (K, color) => new ComicMaterial({ world: K.world, unlit: true, color, inkWeight: 0, fog: false });
-const smokeMat = K => (K._smoke ||= new ComicMaterial({ world: K.world, color: mix(K.pal.ink, K.pal.stock, 0.8), inkWeight: 0.35, hatch: 0, keyMix: 0.75, shadowMul: 0.92, shadowMix: 0.12, fillAmt: 0.1, flat: false }));
+const smokeMat = K => (K._smoke ||= new ComicMaterial({ world: K.world, color: mix(K.pal.ink, K.pal.stock, 0.7), inkWeight: 0.35, hatch: 0, keyMix: 0.7, shadowMul: 0.9, shadowMix: 0.15, fillAmt: 0.1, flat: false }));
+const sootMat = K => (K._soot ||= new ComicMaterial({ world: K.world, color: mix(K.pal.ink, K.pal.stock, 0.45), inkWeight: 0.3, hatch: 0, keyMix: 0.5, shadowMul: 0.85, flat: false }));
 const glowWarm = K => (K._glowWarm ||= unlit(K, mix(K.pal.tangerine, K.pal.yellow, 0.45)));
 
 export const EXTRA = {
@@ -19,12 +20,13 @@ export const EXTRA = {
   hand(K) {
     const M = K.M, pal = K.pal, g = new THREE.Group(), body = new THREE.Group(); g.add(body);
     const skin = M.furn(mix(pal.stock, pal.tangerine, 0.35), { hatch: 0.3, keyMix: 0.4 });
-    body.add(cushion(0.13, 0.04, 0.12, skin, 0.01, 0, 0.01));                                                                 // the palm, under the keel
-    const th = rod(0.016, 0.085, skin, -0.05, 0.0, 0.0); th.rotation.z = -0.95; th.rotation.x = -0.3; body.add(th);           // the thumb, up the left side of the keel
-    for (let i = 0; i < 4; i++) { const f = rod(0.014, 0.075, skin, 0.045 + i * 0.022, 0.0, -0.035 + i * 0.022); f.rotation.z = 0.9 - i * 0.08; f.rotation.x = -0.25; body.add(f); }   // four fingers curling up the right side
-    body.add(slabB(0.17, 0.09, 0.13, M.furn('cobalt'), 0.06, -0.06, 0.12, { ry: -0.35 }));                                      // the cuff, from the right shoulder
-    body.traverse(o => { if (o.isMesh) o.userData.inkMul = 1.35; });
-    const poses = [{ rx: 0.2, y: 0, z: 0 }, { rx: -0.5, y: 0.02, z: -0.06 }, { rx: -0.95, y: -0.1, z: -0.02 }];
+    body.add(cushion(0.03, 0.085, 0.075, skin, 0.046, -0.028, 0.02));                                                          // the palm standing on the keel's right
+    for (let i = 0; i < 4; i++) { const z = 0.05 - i * 0.02; body.add(bent([[0.046, -0.066, z], [0.012, -0.086, z], [-0.028, -0.078, z], [-0.046, -0.05, z + 0.003]], 0.011, skin, 8)); }   // four fingers under the keel, curling up its left
+    body.add(bent([[0.052, 0.002, 0.034], [0.024, 0.016, 0.006], [-0.006, 0.014, -0.022]], 0.012, skin, 8));                    // the thumb over the right wing root
+    body.add(bent([[0.05, -0.05, 0.05], [0.085, -0.095, 0.105], [0.125, -0.15, 0.17]], 0.032, skin, 8));                         // the wrist, down and right toward the frame's edge
+    const cuff = cushion(0.09, 0.08, 0.09, M.furn('cobalt'), 0.13, -0.158, 0.178); cuff.rotation.set(0.6, 0, -0.55); body.add(cuff);   // the sleeve
+    body.traverse(o => { if (o.isMesh) o.userData.inkMul = 1.3; });
+    const poses = [{ rx: 0.12, y: 0, z: 0 }, { rx: -0.55, y: 0.015, z: -0.05 }, { rx: -0.95, y: -0.12, z: -0.02 }];
     g.userData = { dynamic: true, pose: 0, set(k) { g.userData.pose = k; const p = poses[k]; body.rotation.x = p.rx; body.position.set(0, p.y, p.z); } };
     g.userData.set(0); return g;
   },
@@ -64,10 +66,10 @@ export const EXTRA = {
   /** the OVEN SMOKE (effect 0): seven PUFFs in a warm grey climbing the range front, mushrooming under the ceiling, rolling right toward the gym door, on twos */
   ovenSmoke(K, p, r) {
     const g = new THREE.Group(), m = smokeMat(K);
-    const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(-0.15, 0.12, -0.2), new THREE.Vector3(-0.12, 0.9, -0.42), new THREE.Vector3(0.1, 1.55, -0.55), new THREE.Vector3(0.55, 1.62, -0.7), new THREE.Vector3(1.1, 1.5, -0.8), new THREE.Vector3(1.6, 1.3, -0.85)]);
-    const puffs = []; const N = 7;
-    for (let i = 0; i < N; i++) { const s = puff(0.09, m, 0, 0, 0, { ico: 1 }); s.userData.u = i / N; s.userData.jx = rng(r, -0.1, 0.1); s.userData.jz = rng(r, -0.08, 0.08); g.add(s); puffs.push(s); }
-    g.userData = { dynamic: true, tick(f) { for (const s of puffs) { const k = (s.userData.u + f * 0.012) % 1; curve.getPointAt(k, s.position); s.position.x += s.userData.jx; s.position.z += s.userData.jz; s.scale.setScalar(0.5 + k * 1.3); s.rotation.y = f * 0.15 + s.userData.u * 6; } } };
+    const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(-0.62, -0.62, 0.05), new THREE.Vector3(-0.5, 0.35, -0.05), new THREE.Vector3(0.3, 0.75, -0.25), new THREE.Vector3(2.2, 0.72, -0.5), new THREE.Vector3(4.6, 0.6, -0.85), new THREE.Vector3(7.2, 0.45, -1.2)]);
+    const puffs = []; const N = 12;
+    for (let i = 0; i < N; i++) { const s = puff(0.09, m, 0, 0, 0, { ico: 1 }); s.userData.u = i / N; s.userData.jx = rng(r, -0.1, 0.1); s.userData.jz = rng(r, -0.1, 0.1); g.add(s); puffs.push(s); }
+    g.userData = { dynamic: true, tick(f) { for (const s of puffs) { const k = (s.userData.u + f * 0.009) % 1; curve.getPointAt(k, s.position); s.position.x += s.userData.jx; s.position.z += s.userData.jz; s.scale.setScalar(0.5 + k * 1.6); s.rotation.y = f * 0.15 + s.userData.u * 6; } } };
     g.userData.tick(0); return g;
   },
   /** SMOKE ALARM: a DRUM on the ceiling with a GLOW dot that blinks on twos */
@@ -158,10 +160,72 @@ export const EXTRA = {
     g.userData = { dynamic: true, live: 2, set(i) { g.userData.live = i; items.forEach((it, k) => { it.m.material = k === i ? mag : M.dash; const s = k === i ? 1.8 : 1; it.m.scale.set(s, s, 1); }); } };
     g.userData.set(2); return g;
   },
+  /** FRIDGE (furniture 0.7): a tall steel SLAB, two door lines, two handles, a GLARE */
+  fridge(K, p) {
+    const M = K.M, g = new THREE.Group(), w = p.w || 0.9, h = p.h || 1.8, d = p.d || 0.75;
+    g.add(slabB(w, h, d, M.steel, 0, 0, 0)); g.add(slab(w - 0.04, 0.012, 0.01, M.rubberObj, 0, h * 0.62, d / 2 + 0.005, { noInk: true }));
+    for (const y of [h * 0.5, h * 0.72]) g.add(rod(0.012, 0.22, M.rubberObj, -w / 2 + 0.1, y, d / 2 + 0.03, { inkMul: 0.5 }));
+    const gl = glare(M, w * 0.5, h * 0.3, 2); gl.position.set(w * 0.1, h * 0.3, d / 2 + 0.01); g.add(gl); return g;
+  },
+  /** WASHER / DRYER (furniture 0.7): a stock SLAB with a black-glass DRUM window, a control strip, a knob */
+  washer(K, p) {
+    const M = K.M, g = new THREE.Group(), w = p.w || 0.7, h = p.h || 0.95, d = p.d || 0.7;
+    g.add(slabB(w, h, d, M.furn(p.color || 'stock'), 0, 0, 0)); g.add(drum(0.2, 0.2, 0.02, M.blackGlass, 0, 0.42, d / 2 + 0.01, { rx: Math.PI / 2 }));
+    g.add(ring(0.21, 0.015, M.steel, 0, 0.42, d / 2 + 0.02)); g.add(slab(w - 0.06, 0.08, 0.02, M.steel, 0, h - 0.07, d / 2 + 0.01)); g.add(puff(0.02, M.rubberObj, w * 0.3, h - 0.07, d / 2 + 0.04, { inkMul: 0.5 }));
+    const gl = glare(M, 0.24, 0.24, 2); gl.position.set(0, 0.42, d / 2 + 0.03); g.add(gl); return g;
+  },
+  dryer(K, p) { return EXTRA.washer(K, p); },
+  /** DRYER HOSE (clutter 0.6): the flexible hose from the dryer's back to a wall RING, flapping on twos; its stream is the world's dashes */
+  dryerVent(K, p) {
+    const M = K.M, g = new THREE.Group();
+    const hose = bent([[0, -0.3, 0.3], [0.06, -0.15, 0.18], [0.02, -0.04, 0.06], [0, 0, 0]], 0.045, M.rubberObj, 12); g.add(hose);
+    g.add(ring(0.08, 0.018, M.steel, 0, 0, 0)); g.add(drum(0.06, 0.06, 0.02, M.rubberObj, 0, 0, -0.01, { rx: Math.PI / 2 }));
+    g.userData = { dynamic: true, tick(f) { hose.rotation.z = Math.sin(f * 0.9) * 0.08; hose.rotation.x = Math.cos(f * 0.7) * 0.06; } }; return g;
+  },
+  /** RETURN VENT (fixture): a stock SLAB grille with slats (coloured ink, no hulls) on the wall */
+  returnVent(K, p) {
+    const M = K.M, g = new THREE.Group(), w = p.w || 0.5, h = 0.3;
+    g.add(slab(w, h, 0.03, M.furn('stock'), 0, 0, 0)); for (let i = 0; i < 6; i++) g.add(slab(w - 0.06, 0.012, 0.01, M.rubberObj, 0, -h / 2 + 0.04 + i * 0.045, 0.02, { noInk: true })); return g;
+  },
+  /** UTILITY SINK (furniture 0.7): a deep stock SLAB tub with a dark basin and the kit's faucet */
+  utilitySink(K, p) {
+    const M = K.M, g = new THREE.Group(), w = p.w || 0.6, h = p.h || 0.9, d = p.d || 0.55;
+    g.add(slabB(w, h, d, M.furn('stock'), 0, 0, 0)); g.add(slab(w - 0.08, 0.01, d - 0.08, M.rubberObj, 0, h - 0.06, 0, { inkMul: 0.4 }));
+    const f = PIECE.faucet(K); f.position.set(0, h, -d / 2 + 0.06); g.add(f); return g;
+  },
+  /** IRONING BOARD (clutter 0.6): a cyan SLAB top on two X legs of RODs, the iron on it */
+  ironingBoard(K, p) {
+    const M = K.M, g = new THREE.Group(), w = p.w || 1.25, h = p.h || 0.9, d = p.d || 0.36;
+    g.add(slabB(w, 0.03, d, M.furn(p.color || 'cyan', { hatch: 0.3 }), 0, h - 0.03, 0));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) { const leg = rod(0.012, Math.hypot(h - 0.03, 0.5), M.steel, sx * 0.25, 0, sz * d * 0.45); leg.rotation.z = sx * -0.28 * 0; leg.rotation.x = -sz * Math.atan2(d * 0.45, h); g.add(leg); }
+    g.add(slabB(0.16, 0.06, 0.24, M.steel, w * 0.25, h, 0)); g.add(puff(0.035, M.furn('red'), w * 0.25, h + 0.08, 0, { squash: [1, 0.6, 1] })); return g;
+  },
+  /** AC UNIT / HEAT PUMP (furniture 0.7): a steel SLAB box, a RING grille and a fan DRUM on top; its updraft is the world's dashes */
+  acUnit(K, p) {
+    const M = K.M, g = new THREE.Group(), w = p.w || 0.8, h = p.h || 0.8;
+    g.add(slabB(w, h - 0.06, w, M.steel, 0, 0, 0)); g.add(ring(w * 0.4, 0.02, M.rubberObj, 0, h - 0.05, 0, { rx: Math.PI / 2 })); g.add(ring(w * 0.25, 0.012, M.rubberObj, 0, h - 0.05, 0, { rx: Math.PI / 2 }));
+    const blades = new THREE.Group(); blades.position.y = h - 0.09; for (let i = 0; i < 3; i++) { const b = slab(0.28, 0.01, 0.07, M.steel, 0.14, 0, 0, { ry: i * Math.PI * 2 / 3, inkMul: 0.4 }); blades.add(b); } g.add(blades);
+    for (let i = 0; i < 4; i++) g.add(slab(w - 0.04, 0.01, 0.01, M.rubberObj, 0, 0.12 + i * 0.16, w / 2 + 0.005, { noInk: true }));
+    g.userData = { dynamic: true, tick(f) { blades.rotation.y = f * 1.2; } }; return g;
+  },
+  /** SCREEN PORCH (furniture 0.7): the lanai's cage of stock posts and beams with GLARE on every screened panel; doors on the far side, one of them torn */
+  screenPorch(K, p) {
+    const M = K.M, w = p.w, d = p.d, h = p.h, g = new THREE.Group(), x0 = -w / 2, x1 = w / 2, z0 = -d / 2, P = 0.06, fr = M.furn('stock');
+    const doors = (p.doors || []).slice().sort((a, b) => a.x - b.x); const n = 8, pw = w / n;
+    for (let i = 0; i <= n; i++) g.add(slabB(P, h, P, fr, x0 + w * i / n, 0, z0)); for (let i = 1; i <= 2; i++) { g.add(slabB(P, h, P, fr, x0, z0 + d * i / 2)); g.add(slabB(P, h, P, fr, x1, z0 + d * i / 2)); }
+    g.add(slab(w, P, P, fr, 0, h, z0)); g.add(slab(P, P, d, fr, x0, h, 0)); g.add(slab(P, P, d, fr, x1, h, 0)); for (let i = 1; i < n; i++) g.add(slab(P * 0.8, P * 0.8, d, fr, x0 + w * i / n, h + 0.02, 0));
+    for (let i = 0; i < n; i++) { const xm = x0 + pw * (i + 0.5); const door = doors.find(dd => Math.abs(dd.x - xm) < pw / 2 + 0.01 || (xm > dd.x - dd.w / 2 && xm < dd.x + dd.w / 2));
+      if (door && door.torn) { for (let k = 0; k < 5; k++) g.add(slab(0.02, 0.15 + k * 0.08, 0.01, fr, xm - pw * 0.4 + k * pw * 0.2, h - 0.15 - k * 0.04, z0, { noInk: true }));   // the torn screen's ragged strips
+        g.add(slab(pw, 0.05, 0.04, fr, xm, 0.9, z0)); continue; }
+      if (door) { g.add(slab(pw, P * 0.7, P * 0.7, fr, xm, 2.0, z0)); continue; }   // the screen door's head; the leaf stands open elsewhere
+      g.add(slab(pw, 0.05, 0.04, fr, xm, 0.9, z0)); const gl = glare(M, pw - 0.2, h - 1.1, 2); gl.position.set(xm, h * 0.62, z0 + 0.01); g.add(gl); }
+    for (const z of [z0 + d * 0.25, z0 + d * 0.75]) for (const x of [x0, x1]) { g.add(slab(0.04, 0.05, d / 2, fr, x, 0.9, z)); const gl = glare(M, d / 2 - 0.2, h - 1.1, 2); gl.position.set(x + (x < 0 ? 0.01 : -0.01), h * 0.62, z); gl.rotation.y = Math.PI / 2; g.add(gl); }
+    return g;
+  },
   /** a pool of PUFFs that bursts from a point (crumbs from the toast, drips from the sprinkler, soot behind a smoked plane), stepping on twos */
   puffBurst(K, o = {}) {
     const g = new THREE.Group(), n = o.n || 6, items = [];
-    const mat = o.mat || (o.color ? new ComicMaterial({ world: K.world, color: o.color, inkWeight: 0.5, hatch: 0, keyMix: 0.5 }) : smokeMat(K));
+    const mat = o.mat || (o.color ? new ComicMaterial({ world: K.world, color: o.color, inkWeight: 0.5, hatch: 0, keyMix: 0.5 }) : o.soot ? sootMat(K) : smokeMat(K));
     for (let i = 0; i < n; i++) { const p = puff(o.r || 0.03, mat, 0, 0, 0, { ico: 1 }); p.visible = false; p.userData = { t0: -9, v: new THREE.Vector3() }; g.add(p); items.push(p); }
     let k = 0; const rr = mulberry32(o.seed ?? 101);   // seeded: the same proof URL gives the same frame
     g.userData = { dynamic: true, items, gravity: o.gravity ?? 3, life: o.life ?? 0.7, grow: o.grow ?? 1,

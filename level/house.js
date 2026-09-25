@@ -11,6 +11,7 @@
  */
 import { SCENES, HOUSE, DERIVED, ENV } from '../kit/house-spec.js';
 import { RUN } from '../kit/run-spec.js';
+import { applyPass6 } from './opened.js';
 
 const clone = v => JSON.parse(JSON.stringify(v));
 export const scenes = clone(SCENES);
@@ -63,7 +64,7 @@ export const LENGTH = +(LAUNCH.z - FINISH.z).toFixed(1);   // 43.9
 export const LEVEL = {
   title: 'THE HOUSE IN ONE', caption: 'Meanwhile, just inside the front door…', room: 'THE FRONT DOOR',
   scenes, place, launch: LAUNCH, finish: FINISH, checkpoints: CHECKPOINTS, length: LENGTH, finishBonus: 150,
-  plane: { scale: RUN.plane.scale, radius: RUN.plane.radius },
+  plane: { scale: 0.04, radius: RUN.plane.radius },   // pass 6: the mini plane, two thirds of the kit's 0.06 (0.29 m long); the sphere stays 0.15 m and now encloses it
   glide: { g: RUN.glide.g, trim: 7.0, dt: 1 / 120, maxT: RUN.glide.maxT },
   tempo: 0.8,
   gauge: { min: 4, max: 12, lofts: [-12, -4, 5, 14, 26], yaw: 15, step: 0.05, pullFrac: 0.38, yawFrac: 0.19, cancelPx: 24, swipePxPerS: 150, swipeMs: 60 },
@@ -80,4 +81,6 @@ export const LEVEL = {
 export const HARD_KIND = new Set(['door', 'stormDoor', 'fence', 'shed']);
 export const FURN_KIND = new Set(['sofa', 'peninsula', 'baseRun', 'upperRun', 'range', 'microwave', 'reformer', 'eggChair', 'sideTable', 'plantStand', 'floorLamp', 'shoeTower', 'oak', 'palms', 'hedge']);
 export const hitOf = kind => HARD_KIND.has(kind) ? 'hard' : FURN_KIND.has(kind) ? 'furniture' : 'soft';
+/* ── pass 6: THE HOUSE, OPENED UP (level/opened.js): the kitchen sideways with three ways out, the laundry, the lanai's two ways out, the streams ── */
+applyPass6(LEVEL, { yard: 'A' });
 export { HOUSE, DERIVED, ENV, RUN };

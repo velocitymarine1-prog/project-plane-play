@@ -4,9 +4,24 @@
  *   const W = buildWorld(world, { hullMat, seed }) → { scene, rooms, extras, kits, textures, mats, hullMat, tick(t, t12, stepped), cull(camZ), stats }
  * The kit's buildScene gets each scene without the kinds it does not know (and without the pool, which the game draws); nothing in kit/ changes.
  */
-import { THREE, HullMaterial, skyDome, inkAll, mulberry32 } from '../kit/comic3d.js';
+import { THREE, HullMaterial, skyDome, inkAll, mulberry32, rng } from '../kit/comic3d.js';
 import { buildScene, makeTextures, makeMats } from '../kit/interior.js';
 import { PIECE } from '../kit/parts.js';
+
+/** a stream's dashes as ONE instanced mesh (the kit's windDashes draws a mesh per dash; ten streams cost the phone two hundred draw calls).
+ *  The kit's numbers: 12–40 dashes scrolling along the box's direction on twos, steam dashes shorter and greyer. */
+function instancedWind(K, w, r, id) {
+  const M = K.M, dir = new THREE.Vector3(...w.dir).normalize();
+  const L = Math.abs((w.x[1] - w.x[0]) * dir.x) + Math.abs((w.y[1] - w.y[0]) * dir.y) + Math.abs((w.z[1] - w.z[0]) * dir.z) || 1;
+  const lift = w.kind === 'lift', n = Math.min(40, Math.max(12, Math.round(L * 6)));
+  const geo = new THREE.BoxGeometry(0.02, 0.02, lift ? 0.16 : 0.28); const im = new THREE.InstancedMesh(geo, lift ? M.steamDash : M.dash, n);
+  im.name = 'wind-' + id; im.userData.noInk = true; im.userData.dynamic = true; im.frustumCulled = false;
+  const o = []; for (let i = 0; i < n; i++) o.push([rng(r, w.x[0], w.x[1]), rng(r, w.y[0], w.y[1]), rng(r, w.z[0], w.z[1]), rng(r, 0, L)]);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir), pos = new THREE.Vector3(), sc = new THREE.Vector3(1, 1, 1);
+  const inside = v => v.x >= w.x[0] && v.x <= w.x[1] && v.y >= w.y[0] && v.y <= w.y[1] && v.z >= w.z[0] && v.z <= w.z[1];
+  im.userData.tick = f => { for (let i = 0; i < n; i++) { const d = o[i], u = (d[3] + f * 0.18) % L; pos.set(d[0] + dir.x * (u - d[3]), d[1] + dir.y * (u - d[3]), d[2] + dir.z * (u - d[3])); if (!inside(pos)) pos.set(d[0], d[1], d[2]); m.compose(pos, q, sc); im.setMatrixAt(i, m); } im.instanceMatrix.needsUpdate = true; };
+  im.userData.tick(0); return im;
+}
 import { LEVEL } from '../level/house.js';
 import { EXTRA, KIT_DYNAMIC } from './pieces.js';
 
@@ -54,6 +69,16 @@ function mergeStatic(room) {
   let after = 0;
   for (const b of buckets.values()) { const geo = mergeItems(b.items); const mesh = new THREE.Mesh(geo, b.material); mesh.name = 'merged'; mesh.userData.noInk = true; mesh.userData.isHull = b.material instanceof HullMaterial; mesh.userData.merged = true; props.add(mesh); after++; }
   for (const p of removed) p.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
+  /* the walls: each wall group (the cutaway toggles it) keeps its group but its slabs, casings, baseboards and hulls become one mesh per material */
+  const arch = room.children.find(c => c.name === 'architecture');
+  for (const wg of (arch ? arch.children : []).filter(c => c.name.startsWith('wall-'))) {
+    wg.updateMatrixWorld(true); const winv = new THREE.Matrix4().copy(wg.matrixWorld).invert(); const bk = new Map(); const old = [];
+    wg.traverse(o => { if (!o.isMesh || !o.visible) return; const key = matKey(o.material); let b = bk.get(key); if (!b) { b = { material: o.material, items: [] }; bk.set(key, b); } b.items.push({ geometry: o.geometry, matrix: new THREE.Matrix4().multiplyMatrices(winv, o.matrixWorld) }); old.push(o); });
+    if (old.length <= bk.size) continue; before += old.length;
+    for (const c of wg.children.slice()) wg.remove(c);
+    for (const b of bk.values()) { const mesh = new THREE.Mesh(mergeItems(b.items), b.material); mesh.name = 'merged-wall'; mesh.userData.noInk = true; mesh.userData.isHull = b.material instanceof HullMaterial; wg.add(mesh); after++; }
+    for (const o of old) if (o.geometry) o.geometry.dispose();
+  }
   return { before, after };
 }
 
@@ -73,7 +98,11 @@ export function buildWorld(world, o = {}) {
       if (p.kind === 'smoke') { extras[p.id] = place(EXTRA.ovenSmoke(K, p, r), p.x, p.y, p.z); continue; }
       const make = EXTRA[p.kind]; if (!make) continue;
       extras[p.id] = place(make(K, p, r), p.x, p.y ?? 0, p.z, p.ry || 0);
+      if (p.boost && p.boost.accel) { const wd = instancedWind(K, p.boost, r, p.id); g.add(wd); dyn.push(wd); }   // the game's own pieces draw their streams
     }
+    for (const wd of g.children.filter(c => c.name.startsWith('wind-'))) {   // the kit's streams (a mesh per dash) become one instanced mesh each
+      if (wd.isInstancedMesh) continue; const p = sc.props.find(q => 'wind-' + q.id === wd.name); if (!p || !p.boost) continue;
+      g.remove(wd); wd.traverse(o2 => { if (o2.isMesh && o2.geometry) o2.geometry.dispose(); }); const im = instancedWind(K, p.boost, r, p.id); g.add(im); dyn.push(im); }
     if (sc.key === 'kitchen') { const range = sc.props.find(p => p.id === 'range'); extras['oven door'] = place(EXTRA.ovenDoor(K, range), range.x, 0, range.z); }
     if (sc.key === 'backyard') { const pool = sc.floors.find(f => f.id === 'pool'); extras.pool = place(EXTRA.pool(K, pool, r), 0, 0, 0); }
     if (!o.noMerge) stats.merged[sc.key] = mergeStatic(g);

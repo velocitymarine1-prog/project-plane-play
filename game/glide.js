@@ -52,6 +52,17 @@ function propColliders(sc, p, z0) {
     box({ id: id + ' side L', cx: x0, cz: (zf + zb) / 2, w: 0.04, d: p.d, y0: 0, y1: p.h }); box({ id: id + ' side R', cx: x1, cz: (zf + zb) / 2, w: 0.04, d: p.d, y0: 0, y1: p.h });
     box({ id: id + ' roof', cx: p.x, cz: (zf + zb) / 2, w: p.w, d: p.d, y0: p.h, y1: p.h + 0.1 });
     if (p.doorAt != null) box({ id: id + ' door leaf', cx: p.doorAt + p.doorW / 2, cz: zb + p.doorW / 2, w: 0.05, d: p.doorW, y0: 0, y1: 2.0 });
+  } else if (p.kind === 'screenPorch') {                                  // the lanai's cage with doors (or torn panels) on its far side
+    const x0 = p.x - p.w / 2, x1 = p.x + p.w / 2, zf = z + p.d / 2, zb = z - p.d / 2, H = p.h;
+    const cuts = (p.doors || []).map(d => [d.x - d.w / 2, d.x + d.w / 2, d]).sort((a, b) => a[0] - b[0]); let u = x0;
+    for (const [c0, c1, d] of cuts) { if (c0 - u > 0.05) box({ id: id + ' panel', cx: (u + c0) / 2, cz: zb, w: c0 - u, d: 0.04, y0: 0, y1: H }); if (!d.torn) box({ id: id + ' top', cx: d.x, cz: zb, w: d.w, d: 0.06, y0: d.h || 2.0, y1: H + 0.1 }); u = c1; }
+    if (x1 - u > 0.05) box({ id: id + ' panel', cx: (u + x1) / 2, cz: zb, w: x1 - u, d: 0.04, y0: 0, y1: H });
+    box({ id: id + ' side L', cx: x0, cz: (zf + zb) / 2, w: 0.04, d: p.d, y0: 0, y1: H }); box({ id: id + ' side R', cx: x1, cz: (zf + zb) / 2, w: 0.04, d: p.d, y0: 0, y1: H });
+    box({ id: id + ' roof', cx: p.x, cz: (zf + zb) / 2, w: p.w, d: p.d, y0: H, y1: H + 0.1 });
+  } else if (p.kind === 'swingSet' && p.collide === 'parts') {              // the A-frames and the bar as one box each, the seats as clutter
+    for (const sx of [-1, 1]) box({ id: id + ' frame', cx: p.x + sx * p.w / 2, cz: z, w: 0.14, d: 1.5, y0: 0, y1: p.h });
+    box({ id: id + ' bar', cx: p.x, cz: z, w: p.w, d: 0.1, y0: p.h - 0.15, y1: p.h + 0.05 });
+    for (const sx of [-0.75, 0.75]) { box({ id: id + ' seat', cx: p.x + sx, cz: z, w: 0.5, d: 0.2, y0: 0.42, y1: 0.5 }); box({ id: id + ' rope', cx: p.x + sx, cz: z, w: 0.5, d: 0.04, y0: 0.5, y1: p.h - 0.15 }); }
   } else if (ROUND[p.kind]) {
     cyl({ cx: p.x, cz: z, r: ROUND[p.kind], y0, y1: y0 + p.h });
   } else if (p.h > 0) {
@@ -101,17 +112,23 @@ function hitWall(c, x, y, z) {
   for (const o of c.openings) if (u > o.u0 + R && u < o.u1 - R && y > o.y0 + R && y < o.y1 - R) return false;
   return true;
 }
-/** what the plane touches at (x, y, z), if anything: { result, id, c } */
-export function contact(colliders, x, y, z) {
+/** what the plane touches at (x, y, z), if anything: { result, id, c }, in the colliders' order. A soft prop the plane is already moving
+ *  away from (its nearest face behind the plane: it was deflected a step ago, or the plane skims under it) does not answer, so a wall standing
+ *  behind that prop still does (pass 6: the model and the first port let a plane skimming under the cabinets against the back wall through the wall). */
+export function contact(colliders, x, y, z, vx = 0, vy = 0, vz = 0) {
   for (const c of colliders) {
+    let hit = null;
     switch (c.type) {
-      case 'box': if (hitBox(c, x, y, z)) return { result: 'crumple', id: c.id, c }; break;
-      case 'cyl': if (y > c.y0 - R && y < c.y1 + R && (x - c.cx) ** 2 + (z - c.cz) ** 2 < (c.r + R) ** 2) return { result: 'crumple', id: c.id, c }; break;
-      case 'sphere': if ((x - c.cx) ** 2 + (y - c.cy) ** 2 + (z - c.cz) ** 2 < (c.r + R) ** 2) return { result: 'crumple', id: c.id, c }; break;
-      case 'wall': if (hitWall(c, x, y, z)) return { result: 'crumple', id: c.id, c }; break;
-      case 'ceiling': if (x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1 && y > c.y - R) return { result: 'bonk', id: c.id, c }; break;
-      case 'pond': if (x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1 && y < R) return { result: 'splash', id: c.id, c }; break;
+      case 'box': if (hitBox(c, x, y, z)) hit = { result: 'crumple', id: c.id, c }; break;
+      case 'cyl': if (y > c.y0 - R && y < c.y1 + R && (x - c.cx) ** 2 + (z - c.cz) ** 2 < (c.r + R) ** 2) hit = { result: 'crumple', id: c.id, c }; break;
+      case 'sphere': if ((x - c.cx) ** 2 + (y - c.cy) ** 2 + (z - c.cz) ** 2 < (c.r + R) ** 2) hit = { result: 'crumple', id: c.id, c }; break;
+      case 'wall': if (hitWall(c, x, y, z)) hit = { result: 'crumple', id: c.id, c }; break;
+      case 'ceiling': if (x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1 && y > c.y - R) hit = { result: 'bonk', id: c.id, c }; break;
+      case 'pond': if (x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1 && y < R) hit = { result: 'splash', id: c.id, c }; break;
     }
+    if (!hit) continue;
+    if ((c.hit === 'soft' || c.hit === 'furniture') && c.kind !== 'trampoline') { const n = normalOf(c, x, y, z); if (vx * n[0] + vy * n[1] + vz * n[2] >= 0) continue; }
+    return hit;
   }
   if (y < R) return { result: 'land', id: 'floor' };
   return null;
@@ -180,7 +197,7 @@ export function simulate(st, L, card) {
           const k = 1 - TOAST.bleed; vx *= k; vy *= k; vz *= k; toastHit = true; scrapes++; ev('crumb', 'kitchen/toast');
           x += n[0] * (R + TOAST.r - d + 0.01); y += n[1] * (R + TOAST.r - d + 0.01); z += n[2] * (R + TOAST.r - d + 0.01);
           if (Math.hypot(vx, vy, vz) < SOFT.minSpeed) { ev('end', 'toast'); return done({ result: 'land', id: 'toast' }); } } } }
-    const hit = contact(C, x, y, z);
+    const hit = contact(C, x, y, z, vx, vy, vz);
     if (hit) {
       const c = hit.c, soft = !!c && (c.hit === 'soft' || c.hit === 'furniture'), hard = !!c && c.hit === 'hard';   // the floor and the ponds end the run
       const tn = (c && c.kind === 'trampoline') ? normalOf(c, x, y, z) : null;

@@ -26,26 +26,14 @@
   #ui button { font: 400 16px/1 Bangers, Impact, "Arial Black", sans-serif; letter-spacing: .05em; color: var(--ink); background: var(--paper); border: 3px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); padding: 7px 9px; cursor: pointer; touch-action: manipulation; pointer-events: auto; }
   #ui button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   #ui button:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
-  .cash { position: absolute; left: calc(24px + 0px); top: calc(66px + var(--sat)); font: 400 26px/1 Bangers, Impact, "Arial Black", sans-serif; letter-spacing: .04em; color: var(--ink); text-shadow: 2px 2px 0 var(--paper); font-variant-numeric: tabular-nums; }
-  #pauseBtn { position: absolute; right: 26px; top: calc(90px + var(--sat)); width: 40px; height: 40px; padding: 0; border-radius: 50%; font-size: 15px; }
-  .strip { position: absolute; left: 24px; right: 24px; top: calc(136px + var(--sat)); }
-  .strip .track { position: relative; height: 14px; border: 3px solid var(--ink); background: var(--paper); box-shadow: 3px 3px 0 var(--ink); display: flex; }
-  .strip .seg { height: 100%; border-right: 2px solid var(--ink); opacity: .6; } .strip .seg:last-of-type { border-right: 0; }
-  .strip .pool { position: absolute; top: 0; bottom: 0; background: var(--cyan); opacity: .9; }
-  .strip .now { position: absolute; top: -10px; width: 0; height: 0; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 12px solid var(--accent); transform: translateX(-50%); filter: drop-shadow(1px 1px 0 var(--ink)); transition: left .12s linear; }
-  .strip .best { position: absolute; top: -3px; bottom: -3px; width: 3px; background: var(--ink); transform: translateX(-50%); }
-  .strip .labels { display: flex; font: 700 9px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em; color: var(--ink); margin-top: 5px; }
-  .strip .labels span { overflow: hidden; white-space: nowrap; }
-  .strip .read { position: absolute; right: 52px; top: -24px; font: 700 10px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em; background: var(--paper); border: 2px solid var(--ink); padding: 3px 6px; }
-  .bottom { position: absolute; left: 50%; bottom: calc(46px + var(--sab)); transform: translateX(-50%); display: flex; align-items: center; gap: 8px; }
-  .gauge { width: 200px; height: 24px; border: 3px solid var(--ink); background: var(--paper); box-shadow: 3px 3px 0 var(--ink); position: relative; overflow: hidden; }
-  .gauge i { position: absolute; inset: 0; width: 0%; background: repeating-linear-gradient(90deg, var(--accent) 0 12px, var(--cap) 12px 24px); border-right: 3px solid var(--ink); }
-  .gauge i.locked { background: repeating-linear-gradient(90deg, var(--accent) 0 8px, var(--ink) 8px 12px); }
-  .gauge s { position: absolute; top: 0; bottom: 0; left: 100%; width: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, var(--lock) 4px 7px); border-left: 3px solid var(--ink); text-decoration: none; }
-  .gauge b { position: absolute; inset: 0; display: grid; place-items: center; font: 400 15px/1 Bangers, Impact, "Arial Black", sans-serif; letter-spacing: .08em; color: var(--ink); }
-  .gauge em { position: absolute; top: -1px; font: 700 9px/1 ui-monospace, Menlo, monospace; color: var(--ink); background: var(--paper); padding: 1px 3px; transform: translateX(-100%); font-style: normal; }
-  #readout { position: absolute; left: 50%; bottom: calc(22px + var(--sab)); transform: translateX(-50%); font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .05em; white-space: nowrap; background: var(--paper); border: 2px solid var(--ink); padding: 4px 8px; }
-  .cards { position: absolute; left: 50%; bottom: calc(96px + var(--sab)); transform: translateX(-50%); display: flex; gap: 10px; width: min(560px, calc(100vw - 32px)); justify-content: center; transition: transform .28s cubic-bezier(.4,0,.2,1), opacity .2s; pointer-events: auto; }
+  .slot { position: absolute; left: 24px; top: calc(24px + var(--sat)); font-variant-numeric: tabular-nums; pointer-events: none; }
+  .slot.rest { font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .08em; background: var(--paper); border: 2px solid var(--ink); padding: 5px 8px; color: var(--ink); }
+  .slot.flight { font: 400 40px/1 Bangers, Impact, "Arial Black", sans-serif; letter-spacing: .04em; color: var(--accent); -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; text-shadow: 4px 4px 0 var(--ink); }
+  #pauseBtn { position: absolute; right: 26px; top: calc(20px + var(--sat)); width: 40px; height: 40px; padding: 0; border-radius: 50%; font-size: 15px; }
+  .cashTag { position: absolute; left: 50%; bottom: calc(210px + var(--sab)); transform: translateX(-50%); font: 400 22px/1 Bangers, Impact, "Arial Black", sans-serif; letter-spacing: .04em; color: var(--ink); background: var(--paper); border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); padding: 4px 10px; font-variant-numeric: tabular-nums; transition: opacity .2s; }
+  .cashTag.off { opacity: 0; }
+  .c3d-cap, .c3d-name, .c3d-count, .c3d-panel { display: none !important; }
+  .cards { position: absolute; left: 50%; bottom: calc(40px + var(--sab)); transform: translateX(-50%); display: flex; gap: 10px; width: min(560px, calc(100vw - 32px)); justify-content: center; transition: transform .28s cubic-bezier(.4,0,.2,1), opacity .2s; pointer-events: auto; }
   .cards.off { transform: translate(-50%, 160%); opacity: 0; pointer-events: none; }
   .card { flex: 1 1 0; min-width: 0; text-align: left; display: grid; grid-template-columns: 1fr auto; grid-template-areas: 'title title' 'num num' 'unlock price'; gap: 3px 6px; align-items: end; padding: 8px 8px 6px !important; background: var(--paper); position: relative; }
   .card b { grid-area: title; } .card .num { grid-area: num; } .card .unlock { grid-area: unlock; } .card .price { grid-area: price; }
@@ -77,29 +65,28 @@
   #resetBtn { position: relative; overflow: hidden; } #resetBtn i { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: var(--accent); opacity: .5; }
   #resetBtn.armed { background: var(--accent); color: var(--paper); }
   .hide #ui, .hide .c3d-root { display: none; }
-  @media (max-width: 600px) { .gauge { width: 160px; } #ui button { font-size: 14px; padding: 6px 8px; } .cash { font-size: 22px; top: calc(58px + var(--sat)); } .strip { top: calc(110px + var(--sat)); } .strip .read { right: 46px; top: -22px; } #pauseBtn { top: calc(60px + var(--sat)); width: 36px; height: 36px; } .c3d-name, .c3d-twos { display: none !important; } .card b { font-size: 15px; } .card .price { width: 50px; height: 50px; } .card .price span { font-size: 11px; } .panel b { font-size: 24px; } }
-  @media (max-height: 640px) { .cards { bottom: calc(86px + var(--sab)); } .strip { top: calc(96px + var(--sat)); } }
-  @media (prefers-reduced-motion: reduce) { .cards, .strip .now { transition: none; } }
-  body.shot .cards, body.shot .strip .now, body.shot .c3d-sfx { transition: none; animation: none; }   /* proof frames: nothing in motion in the DOM */
+  .cashTag.off, .cards.off { pointer-events: none; }
+  @media (max-width: 600px) { #ui button { font-size: 14px; padding: 6px 8px; } .slot.flight { font-size: 30px; } #pauseBtn { top: calc(16px + var(--sat)); width: 36px; height: 36px; } .card b { font-size: 15px; } .card .price { width: 50px; height: 50px; } .card .price span { font-size: 11px; } .panel b { font-size: 24px; } .cashTag { font-size: 18px; bottom: calc(190px + var(--sab)); } }
+  @media (max-height: 640px) { .cards { bottom: calc(30px + var(--sab)); } .cashTag { bottom: calc(170px + var(--sab)); } }
+  @media (prefers-reduced-motion: reduce) { .cards, .cashTag { transition: none; } }
+  body.shot .cards, body.shot .cashTag, body.shot .c3d-sfx { transition: none; animation: none; }   /* proof frames: nothing in motion in the DOM */
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
 </head>
 <body>
 <canvas id="c" tabindex="0" aria-label="Project Plane: throw a paper plane through a comic-book house. Drag the plane back and swipe forward to throw; arrow keys aim, 1 to 5 pick the loft, Space throws."></canvas>
 <div id="ui">
-  <div class="cash" id="cash">$0</div>
+  <div class="slot rest" id="slot"></div>
   <button type="button" id="pauseBtn" aria-label="Pause" aria-expanded="false">II</button>
-  <div class="strip" id="strip"><div class="read" id="bestRead"></div><div class="track" id="track"><div class="now" id="now" style="left:0%"></div><div class="best" id="bestTick" hidden></div></div><div class="labels" id="labels"></div></div>
+  <div class="cashTag off" id="cashTag">$0</div>
   <div class="cards off" id="cards"></div>
-  <div class="bottom" id="bottom"><button type="button" id="stepL" aria-label="Step left">◀ STEP</button><div class="gauge" id="gauge" role="meter" aria-label="Throw power"><i id="fill"></i><s id="lock"></s><b id="gaugeText">DRAG BACK · SWIPE</b><em id="capMark"></em></div><button type="button" id="stepR" aria-label="Step right">STEP ▶</button></div>
-  <div id="readout" class="read"></div>
   <div class="panel" id="panel" hidden></div>
-  <div class="hint" id="hint" hidden><b>DRAG THE PLANE BACK</b>then swipe forward to throw · lift early for a dart, follow through high for a lob<br><span class="folio">1</span></div>
+  <div class="hint" id="hint" hidden><b>DRAG THE PLANE BACK</b>then swipe forward to throw<br><span class="folio">1</span></div>
   <div class="pauseMenu" id="pause" hidden><div class="box" role="dialog" aria-label="Paused"><h2>PAUSED</h2>
     <div class="row"><button type="button" id="resumeBtn">RESUME</button><button type="button" id="twosBtn">ON TWOS</button></div>
     <div class="row"><button type="button" id="resetBtn" aria-label="Reset progress: hold for two seconds"><i></i>RESET PROGRESS · HOLD 2 S</button></div>
     <p id="fps">…</p><p id="storageNote" class="note" hidden></p>
-    <p>PROJECT PLANE · level 1 · THE HOUSE IN ONE · design passes 1–3 as built in pass 4 · the COMIC 3D house style at 0.4 · keys: ← → yaw · ↑ ↓ power · Q E step · 1–5 loft · space throws · R retries · T twos · H hides</p>
+    <p>PROJECT PLANE · level 1 · THE HOUSE IN ONE · design passes 1–3 and 6 · the COMIC 3D house style at 0.4 · keys: ← → yaw · ↑ ↓ power · Q E step · 1–5 loft · space throws · R retries · T twos · H hides · P pauses</p>
   </div></div>
 </div>
 <script type="module" src="game/main.js"></script>
