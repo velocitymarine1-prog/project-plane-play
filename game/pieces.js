@@ -11,7 +11,7 @@ import { slab, slabB, cushion, rod, drum, ring, puff, cutout, dash, glowDrum, gl
 
 const TAU = Math.PI * 2;
 const unlit = (K, color) => new ComicMaterial({ world: K.world, unlit: true, color, inkWeight: 0, fog: false });
-const smokeMat = K => (K._smoke ||= new ComicMaterial({ world: K.world, color: mix(K.pal.ink, K.pal.stock, 0.72), inkWeight: 0.4, hatch: 0, keyMix: 0.7, shadowMul: 0.9, shadowMix: 0.15, fillAmt: 0.1 }));
+const smokeMat = K => (K._smoke ||= new ComicMaterial({ world: K.world, color: mix(K.pal.ink, K.pal.stock, 0.8), inkWeight: 0.35, hatch: 0, keyMix: 0.75, shadowMul: 0.92, shadowMix: 0.12, fillAmt: 0.1, flat: false }));
 const glowWarm = K => (K._glowWarm ||= unlit(K, mix(K.pal.tangerine, K.pal.yellow, 0.45)));
 
 export const EXTRA = {

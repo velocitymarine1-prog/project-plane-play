@@ -232,7 +232,7 @@ function sfx(text, x, y, step) { if (Q.shot && QS.get('sfx') !== '1') return; hu
 const clock = new SteppedClock();
 function simulateFrame(dt) {
   const t = clock.t, t12 = clock.t12, aspect = (canvas.clientWidth || innerWidth) / (canvas.clientHeight || innerHeight), f = Math.floor(t12 * 12);
-  if (S.mode === 'start' || S.mode === 'aim' || S.mode === 'finish' || S.mode === 'boot') {
+  if (S.mode === 'start' || S.mode === 'aim' || S.mode === 'boot') {
     poseOnHand(); plane.userData.update(t, t12, 0); if (S.mode === 'start') { const idle = reduce ? 0 : Math.sin(t * 1.4) * 0.006; plane.position.y += idle; hand.position.y += idle; }
   } else if (S.mode === 'flight') {
     const Pth = S.run.path, dtS = LEVEL.glide.dt; S.tp += dt * TEMPO; const fi = S.tp / dtS, i = Math.min(Pth.length - 2, Math.floor(fi)), fr = Math.min(1, fi - i);
@@ -251,6 +251,7 @@ function simulateFrame(dt) {
     while (S.crossed < LEVEL.checkpoints.length && S.reached >= LEVEL.checkpoints[S.crossed].at) cutTo(S.crossed++);
     if (clock.stepped) { if (S.tp < S.sootUntil) soot.userData.burst(plane.position.clone().add(new THREE.Vector3(0, 0.02, 0.15)), t12, 1, 0.2); if (S.tp < S.dripsUntil && f % 3 === 0) drips.userData.burst(plane.position.clone(), t12, 1, 0.4); }
     if (fi >= Pth.length - 1) endFlight();
+  } else if (S.mode === 'finish') { plane.userData.update(t, t12, 0);
   } else if (S.mode === 'end') {
     S.endT += dt; plane.userData.update(t, t12, 0); if (S.run.result !== 'gate' && S.run.result !== 'land' && !reduce) plane.rotateX(dt * 2);
     if (S.endPhase === 0 && S.endT > 0.9) { S.endPhase = 1; payOut(); }
