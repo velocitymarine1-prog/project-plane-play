@@ -1,0 +1,14 @@
+{
+  "name": "Project Plane",
+  "short_name": "Plane",
+  "description": "Throw a paper plane through a comic-book house. Every throw pays.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fdf8ee",
+  "theme_color": "#fdf8ee",
+  "icons": [
+    { "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%23fdf8ee'/%3E%3Ccircle cx='96' cy='96' r='78' fill='%23ef4c95' stroke='%2330210a' stroke-width='10'/%3E%3Ctext x='96' y='132' font-family='Impact,Arial Black,sans-serif' font-size='104' text-anchor='middle' fill='%23fdf8ee' stroke='%2330210a' stroke-width='6'%3E1%3C/text%3E%3C/svg%3E", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
