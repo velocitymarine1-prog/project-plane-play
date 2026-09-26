@@ -8,7 +8,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Project Plane">
-<meta name="description" content="Project Plane: throw a paper plane through a comic-book house, a school, a grocery store, a mall, a zoo and a factory. Every throw pays. Buy a better arm and a better plane until the place falls in one throw.">
+<meta name="description" content="Project Plane: throw a paper plane through a house, a school, a grocery store, a mall, a zoo and a factory. Every throw pays. Buy a better arm and a better plane until the place falls in one throw.">
 <title>Project Plane</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23ef4c95' stroke='%2330210a' stroke-width='4'/%3E%3Ctext x='32' y='45' font-family='Impact,Arial Black,sans-serif' font-size='38' text-anchor='middle' fill='%23fdf8ee' stroke='%2330210a' stroke-width='2'%3E1%3C/text%3E%3C/svg%3E">
@@ -97,22 +97,22 @@
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
 </head>
 <body>
-<canvas id="c" tabindex="0" aria-label="Project Plane: throw a paper plane through a comic-book house. Drag the plane back and swipe forward to throw; arrow keys aim, 1 to 5 pick the loft, Space throws."></canvas>
+<canvas id="c" tabindex="0" aria-label="Project Plane: throw a paper plane through a house. Pull the plane back and let go to throw; swipe up as you let go to throw it higher; arrow keys aim, 1 to 5 pick the loft, Space throws."></canvas>
 <div id="ui">
   <div class="slot rest" id="slot"></div>
   <button type="button" id="pauseBtn" aria-label="Pause" aria-expanded="false">II</button>
   <div class="cashTag off" id="cashTag">$0</div>
   <div class="cards off" id="cards"></div>
   <div class="panel" id="panel" hidden></div>
-  <div class="hint" id="hint" hidden><b>DRAG THE PLANE BACK</b>then swipe forward to throw<br><span class="folio">1</span></div>
+  <div class="hint" id="hint" hidden><b>PULL THE PLANE BACK, LET GO</b>swipe up as you let go to throw it higher<br><span class="folio">1</span></div>
   <div class="title" id="title" hidden></div>
   <div class="levels" id="levels" hidden><div class="box" role="dialog" aria-label="The levels"><h2>THE LEVELS</h2>
     <div class="strip" id="levelStrip"></div>
     <div class="row"><button type="button" id="levelsClose">CLOSE</button></div>
-    <p>A level is a fresh run of the same three cards. ALLOWANCE carries. Finish a level to open the next.</p>
+    <p>Every place starts you with a fresh arm and plane; your ALLOWANCE comes along. Finish one to open the next.</p>
   </div></div>
   <div class="pauseMenu" id="pause" hidden><div class="box" role="dialog" aria-label="Paused"><h2>PAUSED</h2>
-    <div class="row"><button type="button" id="resumeBtn">RESUME</button><button type="button" id="twosBtn">ON TWOS</button><button type="button" id="levelsBtn">LEVELS</button></div>
+    <div class="row"><button type="button" id="resumeBtn">RESUME</button><button type="button" id="levelsBtn">LEVELS</button></div>
     <div class="row"><button type="button" id="resetBtn" class="hold" aria-label="Reset this level: hold for two seconds"><i></i>RESET THIS LEVEL · HOLD 2 S</button></div>
     <div class="row"><button type="button" id="resetAllBtn" class="hold" aria-label="Reset everything: hold for two seconds, twice"><i></i>RESET EVERYTHING · HOLD 2 S</button></div>
     <p id="fps">…</p><p id="storageNote" class="note" hidden></p>

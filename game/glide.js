@@ -307,7 +307,7 @@ export function simulate(st, L, card) {
 export function bonkLetters(sn, level = HOUSE) { const B = level.bonk; let i = 0; while (i < B.steps.length && sn >= B.steps[i]) i++; return { text: B.letters[i], step: i + 1 }; }
 /** what a run's end letters, and what stopped it (a lettered pond, landing or carry says its own word) */
 export function endLetters(r, level = HOUSE) {
-  const msg = r.result === 'gate' ? 'SWISH!' : r.bonkedOut ? 'BONKED OUT' : r.letters || level.results[r.result] || String(r.result).toUpperCase();
+  const msg = r.result === 'gate' ? ((level.results && level.results.gate) || 'SWISH!') : r.bonkedOut ? 'BONKED OUT' : r.letters || level.results[r.result] || String(r.result).toUpperCase();
   const what = r.id === 'floor' ? 'the floor' : r.id === 'stall' ? 'a stall' : r.id === 'toast' ? 'the toast' : r.id === 'time' ? 'gone' : String(r.id).replace(/ \((bonked|scraped) out\)/, '').split('/').pop().replace(/^wall /, 'the ').replace(/ (L|R)$/, '');
   return { msg, what };
 }

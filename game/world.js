@@ -10,15 +10,17 @@ import { PIECE } from '../kit/parts.js';
 import { EXTRA, KIT_DYNAMIC } from './pieces.js';
 import { HOUSE, DERIVED } from '../kit/house-spec.js';
 import { HOUSE_PALETTE } from '../kit/interior.js';
-import { VIVID_MATS, fillPalette } from '../level/palette.js';
+import { LOOKS, fillPalette } from '../level/palette.js';
 
 /* ── design pass 9: THE VIVID SET. The kit's palette objects are refilled before any scene is built (the kit's buildScene reads HOUSE_PALETTE),
  *  and the kit's materials take the game's shading knobs (level/palette.js VIVID_MATS): the rooms are seen from inside, where the style book's
  *  shadow band turned every wall on the shadow side and every ceiling brown. ── */
-export function fillVivid() { return fillPalette(HOUSE, DERIVED, HOUSE_PALETTE); }
+let LOOK = 'real';   // pass 10: the look the game was booted with (real, or comic = pass 9's vivid set); its shading knobs are the ones tuneMats turns
+export function fillLook(name = 'real') { LOOK = LOOKS[name] ? name : 'real'; return fillPalette(LOOK, HOUSE, DERIVED, HOUSE_PALETTE); }
+export const fillVivid = () => fillLook('comic');
 const tuned = new WeakSet();
 function vivid(m, role) {
-  if (!m || !m.uniforms || !m.uniforms.uKeyMix || tuned.has(m)) return m; tuned.add(m); const u = m.uniforms, V = VIVID_MATS, o = V[role] || V.furn;
+  if (!m || !m.uniforms || !m.uniforms.uKeyMix || tuned.has(m)) return m; tuned.add(m); const u = m.uniforms, V = LOOKS[LOOK].mats, o = V[role] || V.furn;
   u.uKeyMix.value *= V.keyWash; if (o.shadowMul != null) u.uShadowMul.value = o.shadowMul; if (o.shadowMix != null) u.uShadowMix.value = o.shadowMix; if (o.bias != null) u.uBias.value = o.bias;
   u.uFillAmt.value = Math.min(1, u.uFillAmt.value * V.fill); return m;
 }

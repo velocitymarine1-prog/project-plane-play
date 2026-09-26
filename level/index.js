@@ -7,7 +7,7 @@
  */
 export const LEVELS = [
   { id: 'house', n: 1, title: 'THE HOUSE', line: 'THE HOUSE IN ONE!', next: 'school',
-    tagline: 'Through the front door, the kitchen turned sideways, the laundry or the Pilates room, the lanai, the yard and over the pool to the fence line.' },
+    tagline: 'Throw your paper plane through the house and out over the back fence. Every throw pays.' },
   { id: 'school', n: 2, title: 'THE SCHOOL', line: 'THE SCHOOL IN ONE!', next: 'store',
     tagline: 'Down the locker hall, over the desks, through the lab\'s transom, across the gym, out to the playground and over the sandbox.' },
   { id: 'store', n: 3, title: 'THE GROCERY STORE', line: 'THE STORE IN ONE!', next: 'mall',

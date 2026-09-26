@@ -54,7 +54,7 @@ export const YARD = (() => {
 export const LAUNCH = { x: [-0.2, 0.6], y: 1.5, z: place.foyer + scene('foyer').launch.z };
 export const FINISH = { z: place.backyard + scene('backyard').gate.z, x: [-6, 6], y: [0, 40], note: 'the fence line, any height above 15 cm' };
 export const CHECKPOINTS = [
-  { key: 'foyer', title: 'THE FRONT DOOR', cut: 'THE LIVING ROOM & KITCHEN', letter: 'KITCHEN!', caption: 'Meanwhile, in the kitchen…', z: place.foyer + scene('foyer').gate.z, note: 'the hall\'s mouth', bonus: 10, first: 'FIRST TIME PAST THE HALL' },
+  { key: 'foyer', title: 'THE FRONT DOOR', cut: 'THE LIVING ROOM & KITCHEN', letter: 'THE KITCHEN!', caption: 'Meanwhile, in the kitchen…', z: place.foyer + scene('foyer').gate.z, note: 'the hall\'s mouth', bonus: 10, first: 'FIRST TIME PAST THE HALL' },
   { key: 'kitchen', title: 'THE LIVING ROOM & KITCHEN', cut: 'THE PILATES ROOM & LANAI', letter: 'PILATES ROOM!', caption: 'Meanwhile, in the Pilates room…', z: place.kitchen + scene('kitchen').gate.z, note: 'the door beside the range', bonus: 25, first: 'FIRST TIME PAST THE KITCHEN' },
   { key: 'pilates', title: 'THE PILATES ROOM & LANAI', cut: 'THE BACKYARD', letter: 'OUT BACK!', caption: 'Meanwhile, out back…', z: place.pilates + scene('pilates').gate.z, note: 'the screen door', bonus: 60, first: 'FIRST TIME PAST THE LANAI' },
   { key: 'pond', title: 'THE BACKYARD', cut: 'THE SECOND YARD', letter: 'OVER THE POND!', caption: 'Meanwhile, past the pond…', z: place.backyard - 11.4, note: 'the pond\'s far edge', bonus: 100, first: 'FIRST TIME OVER THE POND' },
@@ -73,7 +73,7 @@ export const LEVEL = {
   toast: { x: 0.75, y: 1.14, z: place.kitchen + 1.3, trig: 2.0, g: 6.5, r: 0.08, bleed: 0.4, bounce: 0.3, slices: [{ u: 3.0, vx: 0.0, vz: 0.6 }, { u: 3.5, vx: 0.3, vz: 1.0 }] },
   tramp: { e: 0.8, keep: 0.5, vmax: 4.5 },
   cameras: { aim: RUN.aim, drone: RUN.drone },
-  results: { gate: 'SWISH!', crumple: 'CRUMPLE!', land: 'SLIDE…', splash: 'SPLOOSH!', lost: 'GONE.' },
+  results: { gate: 'OVER THE FENCE!', crumple: 'CRUMPLED', land: 'LANDED', splash: 'SPLASH!', lost: 'GONE' },   // pass 10: plain words (they were SWISH! · CRUMPLE! · SLIDE… · SPLOOSH! · GONE.)
   hues: { foyer: 'cobalt', kitchen: 'teal', pilates: 'red', backyard: 'lawn', yard2: 'hedge' },
   yard: YARD,
 };
@@ -86,12 +86,12 @@ applyPass6(LEVEL, { yard: 'A' });
 scene('pilates').exterior = null;   // pass 6 built the lanai and the yard in the game; the kit's 'lanai' exterior (a hedge, an oak, a fence) stays off
 /* ── pass 7: the level's identity for the level select, the save and the lettering (level/index.js has the order and the price factor) ── */
 Object.assign(LEVEL, { id: 'house', n: 1, name: 'THE HOUSE', finishLine: 'THE HOUSE IN ONE!', toGo: 'TO THE FENCE', next: 'school', priceMul: 1,
-  tagline: 'Through the front door, the kitchen turned sideways, the laundry or the Pilates room, the lanai, the yard and over the pool to the fence line.',
+  tagline: 'Throw your paper plane through the house and out over the back fence. Every throw pays.',   // pass 10: one sentence a player can use
   paper: [[1, 'NAPKIN', 'napkin'], [5, 'NOTEBOOK PAGE', 'notebook'], [10, 'PAGE ONE', 'pageone'], [15, 'CARDSTOCK', 'cardstock'], [20, 'FOIL', 'foil']],
   armUnlocks: { 1: 'the living room', 2: 'the kitchen door', 3: 'the Pilates room and the lanai', 4: 'over the pond', 5: 'the deck', 6: 'the pool\'s edge' },
   skyLook: scene('backyard').look });
 ['kitchen', 'pilates', 'backyard', 'backyard'].forEach((k, i) => { LEVEL.checkpoints[i].next = k; });   // the scene whose light the cut brings in
-Object.assign(LEVEL.toast, { id: 'toaster', scene: 'kitchen', eventId: 'kitchen/toaster', color: 'toast', letters: { pop: 'POP!', ting: 'TING!', hit: 'CRUMB!' },
+Object.assign(LEVEL.toast, { id: 'toaster', scene: 'kitchen', eventId: 'kitchen/toaster', color: 'toast', letters: { pop: 'POP!', ting: null, hit: 'CRUMB!' },
   counter: { x: [-1.4, 1.2], z: [LEVEL.place.kitchen + 0.45, LEVEL.place.kitchen + 1.45], y: 0.94 } });   // where a slice lands on the counter, not the floor
 /* ── pass 8: QUALITY OF LIFE (26 September 2026, docs/design/08-quality.md), applied last. Isaac's round after playing on the phone: the hand half a
    metre lower with the hall's furniture off its line and the hall's invisible end lintel gone; the plane's true collision shape (game/glide.js reads
@@ -156,4 +156,62 @@ export function applyPass9(LV = LEVEL) {
   LV.pass9 = true; return LV;
 }
 applyPass9(LEVEL);
+/* ── pass 10: A REAL HOUSE (26 September 2026, jumpr t51, docs/design/10-real-house.md), applied last. Isaac: "make the game feel like an actual
+   room… gather a few images of an average real-life house… base it off that". Ten photographs of ordinary rooms (docs/design/ref/) say: white walls
+   in every room and no accent wall, white cabinets, sixty per cent of every frame white or wood, one strong colour per room, daylight through a
+   window in every room. So, as data: the walls' materials, the props' colours and the shoe rack's pairs re-set by id (the palette itself is
+   level/palette.js REAL, filled at boot); pass 9's comic decor (the bunting, PAGE ONE's cover, TODAY: PIE!, STRETCH!, WASH · DRY · FLY!) replaced by
+   what a real house hangs (windows with daylight, a beach print, a map of Florida, a HOME sign, a shopping list, lemons, a LAUNDRY sign, a plant
+   print; the calendar, the clock and the kids' drawings stay). Every piece keeps pass 9's rule: on the wall's face, ≤ 3 cm proud, no collider, so
+   nothing the solver measured moves and `node tools/ladder.mjs` stays byte for byte. `LEVEL.pass10.undo()` puts pass 9's house back (?look=comic). ── */
+export const PASS10 = {
+  walls: { foyer: { 'living back': 'paper' }, kitchen: { left: 'paper' }, pilates: { left: 'paper' } },                            // no accent walls: white in every room
+  colors: {
+    foyer: { 'storm door': 'stock', basket: 'oak', 'box fan': 'stock', 'hall pendant': 'rubber', pendant: 'rubber', sofa: 'cobalt' },   // THE FRONT DOOR stays cobalt; THE SOFA is the living room's one colour
+    kitchen: { 'counter L': 'stock', 'base run': 'stock', 'upper run L': 'stock', 'upper run R': 'stock', peninsula: 'stock', 'gym door': 'stock', 'pendant L': 'rubber', 'pendant R': 'rubber', 'floor fan': 'rubber', 'bread box': 'steel', clock: 'rubber' },   // white shaker cabinets; the chairs stay teal, the bowl coral, the kettle lime
+    pilates: { 'ironing board': 'stock', hamper: 'cobalt', 'drum fan': 'steel', 'floor lamp': 'rubber', 'side table': 'oak', 'egg chair': 'teal', 'egg chair 2': 'oak' },   // the hamper the laundry's colour; the reformer stays mustard, the pot terracotta
+    backyard: { trampoline: 'rubber', shed: 'stock', 'swing set': 'hedge', 'swing post L': 'hedge', 'swing post R': 'hedge', 'swing bar': 'hedge' },   // a black trampoline, a white shed, a green swing set; the leaf blower stays orange
+  },
+  shoes: ['rubber', 'stock', 'steel', 'cobalt', 'rubber', 'stock', 'oak'],   // black, white, grey, one blue pair, black, white, tan
+  face: 0.06, proud: 0.03, windows: 5, pieces: 16, drawings: 2,   // 16 prints, signs, the mirror and the clock, plus the 5 windows: 21 decor props
+};
+export function applyPass10(LV = LEVEL) {
+  const F = scene('foyer'), K = scene('kitchen'), P = scene('pilates'), Y = scene('backyard'), R = Math.PI / 2, by = { foyer: F, kitchen: K, pilates: P, backyard: Y };
+  const undo = [], set = (o, k, v) => { undo.push([o, k, o[k]]); o[k] = v; };
+  for (const [key, walls] of Object.entries(PASS10.walls)) for (const [id, mat] of Object.entries(walls)) { const w = by[key].walls.find(w => w.id === id); if (w) set(w, 'mat', mat); }
+  for (const [key, colors] of Object.entries(PASS10.colors)) for (const [id, color] of Object.entries(colors)) { const p = by[key].props.find(p => p.id === id); if (p) set(p, 'color', color); }
+  set(F.props.find(p => p.id === 'shoe tower'), 'colors', PASS10.shoes.slice());
+  const was = {}; for (const [key, sc] of Object.entries(by)) { was[key] = sc.props.filter(p => p.decor); sc.props = sc.props.filter(p => !p.decor); }   // pass 9's decor out (the fridge's drawings are a field on the fridge and stay)
+  const on = (list, items) => { for (const it of items) list.push(Object.assign({ h: 0, decor: true, pass10: true }, it)); };
+  on(F.props, [
+    { id: 'hall mirror', kind: 'wallMirror', x: -0.89, z: -1.55, y: 1.12, w: 0.5, tall: 0.9, d: 0.03, ry: R, color: 'oak' },                    // THE HALL MIRROR as pass 9 hung it, in a wood frame
+    { id: 'hall window', kind: 'window', x: -0.89, z: -3.6, y: 1.2, w: 0.6, tall: 0.9, d: 0.03, ry: R },                                     // a narrow window in the hall's left wall, past the mirror: daylight in the very first frame
+    { id: 'gallery beach', kind: 'print', x: 0.89, z: -1.15, y: 1.78, w: 0.36, tall: 0.44, d: 0.025, ry: -R, art: 'beach', color: 'rubber' },   // the gallery of three over the shoes: a beach, a HOME sign, the map of Florida (odd, left-heavy, one crooked)
+    { id: 'gallery home', kind: 'print', x: 0.89, z: -1.7, y: 1.8, w: 0.5, tall: 0.3, d: 0.025, ry: -R, art: 'home', color: 'oak' },
+    { id: 'gallery florida', kind: 'print', x: 0.89, z: -2.22, y: 1.8, w: 0.3, tall: 0.34, d: 0.025, ry: -R, art: 'florida', color: 'rubber', tilt: 0.06 },
+    { id: 'living clock', kind: 'clock', x: 0, z: -7.98, y: 3.0, w: 0.04, d: 0.5, ry: -R, color: 'rubber' },                                    // the wall over the arch: the clock, a beach print, the map
+    { id: 'beach print', kind: 'print', x: -1.05, z: -7.94, y: 2.45, w: 0.72, tall: 0.5, d: 0.025, art: 'beach', color: 'oak', frame: 0.04 },
+    { id: 'florida print', kind: 'print', x: 1.05, z: -7.94, y: 2.5, w: 0.5, tall: 0.5, d: 0.025, art: 'florida', color: 'rubber' },
+    { id: 'boat print', kind: 'print', x: -2.45, z: -7.94, y: 1.6, w: 0.6, tall: 0.45, d: 0.025, art: 'boat', color: 'oak' },                  // the panels beside the arch, as pass 9
+    { id: 'palm print', kind: 'print', x: 2.45, z: -7.94, y: 1.6, w: 0.55, tall: 0.42, d: 0.025, art: 'palm', color: 'oak' },
+    { id: 'living window L', kind: 'window', x: -2.94, z: -6.5, y: 0.95, w: 1.2, tall: 1.4, d: 0.03, ry: R },                                 // daylight on the side walls, behind the sofa's end and opposite it
+    { id: 'living window R', kind: 'window', x: 2.94, z: -6.5, y: 0.95, w: 1.2, tall: 1.4, d: 0.03, ry: -R },
+  ]);
+  on(K.props, [
+    { id: 'list board', kind: 'print', x: -0.3, z: -1.94, y: 2.32, w: 0.6, tall: 0.5, d: 0.025, art: 'list', color: 'oak', frame: 0.03 },      // the chalkboard over the sink window: milk · eggs · bread · paper
+    { id: 'lemons print', kind: 'print', x: -3.2, z: -1.94, y: 1.75, w: 0.44, tall: 0.4, d: 0.025, art: 'lemons', color: 'stock' },           // by the back door's casing
+    { id: 'coffee print', kind: 'print', x: 3.0, z: -1.94, y: 1.7, w: 0.44, tall: 0.4, d: 0.025, art: 'coffee', color: 'oak' },               // by the gym door's casing
+    { id: 'calendar', kind: 'poster', x: 4.54, z: 0.2, y: 1.5, w: 0.32, tall: 0.44, d: 0.01, ry: -R, art: 'calendar', color: 'rubber' },      // between the fridge and the fan, as pass 9
+  ]);
+  on(P.props, [
+    { id: 'laundry sign', kind: 'print', x: -3.5, z: -2.04, y: 1.5, w: 0.6, tall: 0.3, d: 0.025, art: 'laundry', color: 'rubber' },           // the laundry's back wall: LAUNDRY, and a window over the utility sink
+    { id: 'laundry window', kind: 'window', x: 0.2, z: -2.04, y: 1.2, w: 0.8, tall: 1.0, d: 0.03 },
+    { id: 'leaf print', kind: 'print', x: 2.6, z: -2.04, y: 2.5, w: 0.5, tall: 0.6, d: 0.025, art: 'leaf', color: 'oak' },                    // the Pilates room's wall over the slider: a plant
+    { id: 'pilates window', kind: 'window', x: 4.94, z: 0.6, y: 1.0, w: 1.2, tall: 1.2, d: 0.03, ry: -R },                                   // the right wall, between the drum fan and the floor lamp
+    { id: 'pool print', kind: 'print', x: 1.06, z: -1.3, y: 1.6, w: 0.6, tall: 0.45, d: 0.025, ry: R, art: 'pool', color: 'oak' },            // the divider, as pass 9
+  ]);
+  LV.pass10 = { look: 'real', undo() { for (const [key, sc] of Object.entries(by)) sc.props = sc.props.filter(p => !p.pass10).concat(was[key]); for (const [o, k, v] of undo.reverse()) o[k] = v; LV.pass10.look = 'comic'; } };
+  return LV;
+}
+applyPass10(LEVEL);
 export { HOUSE, DERIVED, ENV, RUN };

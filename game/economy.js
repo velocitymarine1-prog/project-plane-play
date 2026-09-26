@@ -5,6 +5,7 @@
  * bought with the level's cash), its arm cards' unlock text and its paper; the house is the default, so every tool runs unchanged. */
 import { LEVEL as HOUSE } from '../level/house.js';
 import { ARM, PLANE, ALLOWANCE, PAY, priceOf, cardOf } from '../level/ladder.js';
+import { UNITS, mph, speed, aBit } from './units.js';   // pass 10: the cards in plain words, the arm in mph
 
 /** a level's fresh slot */
 export const freshSlot = () => ({ cash: 0, arm: 1, plane: 1, runs: 0, best: null, milestones: [false, false, false, false, false], finishes: 0, firstFinishRun: null });
@@ -27,13 +28,13 @@ export function settle(st, d, finished, landing, level = HOUSE) {
 export function cards(st, level = HOUSE) {
   const mul = level.priceMul || 1, unlocks = level.armUnlocks || ARM.unlocks, paper = level.paper || PLANE.prints;
   const arm = { key: 'arm', title: 'THE ARM', level: st.arm, maxed: st.arm >= ARM.max, price: st.arm >= ARM.max ? null : priceOf('arm', st.arm, mul),
-    now: `${ARM.cap(st.arm).toFixed(1)} m/s`, next: st.arm >= ARM.max ? 'MAXED' : `${ARM.cap(st.arm).toFixed(1)} → ${ARM.cap(st.arm + 1).toFixed(1)} m/s`, unlock: unlocks[st.arm + 1] ? 'opens ' + unlocks[st.arm + 1] : 'more gauge' };
+    now: speed(ARM.cap(st.arm)), next: st.arm >= ARM.max ? 'MAXED' : UNITS.imperial ? `${mph(ARM.cap(st.arm))} → ${mph(ARM.cap(st.arm + 1))} mph` : `${ARM.cap(st.arm).toFixed(1)} → ${ARM.cap(st.arm + 1).toFixed(1)} m/s`, unlock: unlocks[st.arm + 1] ? 'reaches ' + unlocks[st.arm + 1] : 'throws harder' };
   const np = PLANE.nextPrint(st.plane, paper);
   const plane = { key: 'plane', title: 'THE PLANE', level: st.plane, maxed: false, price: priceOf('plane', st.plane, mul),
-    now: `glide ${PLANE.ratio(st.plane).toFixed(1)}`, next: `glide ${PLANE.ratio(st.plane).toFixed(1)} → ${PLANE.ratio(st.plane + 1).toFixed(1)}`,
-    unlock: (PLANE.damp(st.plane + 1) > PLANE.damp(st.plane) ? 'steadier · ' : '') + (np && np[0] === st.plane + 1 ? `becomes ${np[1]}` : 'about a metre further'), print: PLANE.print(st.plane, paper) };
+    now: `glide ${PLANE.ratio(st.plane).toFixed(1)}`, next: 'glides farther',
+    unlock: (PLANE.damp(st.plane + 1) > PLANE.damp(st.plane) ? 'steadier · ' : '') + (np && np[0] === st.plane + 1 ? `becomes ${np[1]}` : aBit()), print: PLANE.print(st.plane, paper) };
   const allowance = { key: 'allowance', title: 'ALLOWANCE', level: st.allowance, maxed: false, price: priceOf('allowance', st.allowance, mul),
-    now: `×${ALLOWANCE.mult(st.allowance).toFixed(1)}`, next: `×${ALLOWANCE.mult(st.allowance).toFixed(1)} → ×${ALLOWANCE.mult(st.allowance + 1).toFixed(1)}`, unlock: 'every throw pays more, in every level' };
+    now: `×${ALLOWANCE.mult(st.allowance).toFixed(1)}`, next: `+${Math.round((ALLOWANCE.mult(st.allowance + 1) - 1) * 100)} % on every throw`, unlock: 'every throw pays more, everywhere' };
   for (const c of [arm, plane, allowance]) c.affordable = !c.maxed && st.cash >= c.price;
   return [arm, plane, allowance];
 }

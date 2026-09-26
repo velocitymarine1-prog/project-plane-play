@@ -4,21 +4,23 @@
  * States: BOOT (the save, the level by id, its world) → TITLE CARD (a level's first entry) → START LINE (the aim view, the cards) → AIM (the
  * drag) → FLIGHT (the precomputed path played at the tempo) → END (the lettering, the pay panel) → START LINE, or FINISH (THE … IN ONE!,
  * NEXT) → START LINE. PAUSE and the LEVEL SELECT are overlays; choosing a level writes the save's `current` and reloads (a boot).
+ * Pass 10 (A REAL HOUSE): the real set and the re-dressed house unless ?look=comic; feet and mph unless ?units=m; every release throws; the arc.
  * Query flags: ?shot=1&t=N (a proof frame: fixed steps, then the title SHOT-READY) · ?launch=x,yaw,loft,v (throw a line on load) ·
  * ?card=A,P&cash=N (a card for proofs; not saved) · ?level=id (play any level in memory; not saved) · ?screen=aim|pay|finish|pause|levels|title
  * (stage a screen) · ?tempo=1 · ?dpr= · ?merge=0 · ?hud=0 · ?seed= · ?x= (the stance, for frames) · ?vivid=0 · ?decor=0 (pass 9's colours and decor off, for a comparison)
  * Pass 8 (QUALITY OF LIFE): the drone is held under the ceiling, no stream dashes, no ghost of the last throw, the tempo 0.6 from the level.
  */
-import { THREE, ComicWorld, ComicMaterial, HullMaterial, ComicEngine, SteppedClock, mountHUD, TWOS_LABELS, parseQuery, installErrorTitle, inkAll, col, mix } from '../kit/comic3d.js';
+import { THREE, LAW, ComicWorld, ComicMaterial, HullMaterial, ComicEngine, SteppedClock, mountHUD, TWOS_LABELS, parseQuery, installErrorTitle, inkAll, col, mix } from '../kit/comic3d.js';
 import { buildPaperPlane } from '../kit/paper-plane.js';
 import { HOUSE } from '../level/house.js';
 import { LEVELS, byId, nextOf, unlocked, fileOf } from '../level/index.js';
 import { stage, simulate, progressOf, toastAt, bonkLetters, endLetters } from './glide.js';
-import { attach as attachGesture } from './gesture.js';
+import { attach as attachGesture, LEVEL_NOTCH } from './gesture.js';
 import { load, save, slot, resetLevel, resetAll, status as saveStatus } from './save.js';
 import { settle, cards, buy, cardNow, PLANE } from './economy.js';
-import { buildWorld, fillVivid } from './world.js';
-import { vividLooks } from '../level/palette.js';
+import { buildWorld, fillLook } from './world.js';
+import { looks, LOOKS } from '../level/palette.js';
+import { UNITS, dist } from './units.js';
 import { EXTRA } from './pieces.js';
 import { applyPrint } from './prints.js';
 import { mountGameHUD } from './hud.js';
@@ -26,8 +28,10 @@ import { mountGameHUD } from './hud.js';
 /* ───────────── the page's flags, the save, the level ───────────── */
 const Q = parseQuery(), QS = new URLSearchParams(location.search);
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches, coarse = matchMedia('(pointer: coarse)').matches;
-const VIVID = QS.get('vivid') !== '0', DECOR = QS.get('decor') !== '0';   // pass 9: the vivid set and the wall decor, each off for a comparison frame
-if (VIVID) fillVivid();                                                    // before the HUD reads the palette and before any level or scene is built
+const LOOK = QS.get('look') === 'comic' ? 'comic' : 'real', VIVID = QS.get('vivid') !== '0', DECOR = QS.get('decor') !== '0';   // pass 10: the real set unless ?look=comic; pass 9's ?vivid=0 / ?decor=0 stay for a comparison frame
+UNITS.imperial = QS.get('units') !== 'm';                                  // pass 10: feet and mph on the page; the physics and the save stay metric
+if (VIVID) fillLook(LOOK);                                                 // before the HUD reads the palette and before any level or scene is built
+{ const pr = LOOKS[LOOK].print; LAW.drift.centre *= pr.drift; LAW.drift.corner *= pr.drift; LAW.paper.grain *= pr.grain; }   // pass 10 §4.6: the print pass calmed (the engine reads the law when it is built)
 const SAVE = load();
 const PEEK = QS.get('level') || null;                                       // a level played in memory, for proofs and a look ahead
 let levelId = PEEK || SAVE.current || 'house', levelNote = '';
@@ -41,7 +45,8 @@ const INFO = byId(levelId), NEXT = nextOf(levelId);
 const P = slot(SAVE, levelId);                                              // the level's slot; P.allowance reaches the save's root
 const TEMPO = QS.has('tempo') ? Math.max(0.2, +QS.get('tempo') || 1) : LEVEL.tempo;
 const NOSAVE = QS.has('card') || QS.has('cash') || Q.shot || !!PEEK;
-if (VIVID) vividLooks(LEVEL.scenes);                                       // pass 9: the scenes' shadow tints
+if (LOOK === 'comic' && LEVEL.pass10) LEVEL.pass10.undo();               // pass 10: ?look=comic puts pass 9's colours and decor back
+if (VIVID) looks(LEVEL.scenes, LOOK);                                      // the scenes' shadow tints (and the real sky)
 const G = LEVEL.gauge, ST = stage(LEVEL), look0 = LEVEL.scenes[0].look;
 const firstEntry = P.runs === 0;
 
@@ -75,20 +80,20 @@ const soot = EXTRA.puffBurst(K0, { n: 18, r: 0.026, gravity: -0.5, life: 0.8, gr
 const fxPieces = [hand, fan, marks, ...slices, crumbs, drips, soot];
 let pennant = null;
 function placePennant(best) {
-  if (!best) { if (pennant) pennant.visible = false; return; } const text = best.d.toFixed(1) + ' m';
+  if (!best) { if (pennant) pennant.visible = false; return; } const text = dist(best.d, { upper: false });
   if (!pennant) { pennant = EXTRA.pennant(K0, text); inkAll(pennant, hullMat, 66); scene.add(pennant); fxPieces.push(pennant); } else pennant.userData.setText(text);
   pennant.visible = true; pennant.position.set(Math.max(-3, Math.min(3, best.x)), floorAt(best.x, best.z), Math.max(LEVEL.finish.z, Math.min(LEVEL.launch.z - 0.3, best.z)));
 }
 /** the floor under a point (the mall's balcony is a storey up): the highest solid floor whose footprint holds it, else the ground */
 function floorAt(x, z) { let y = 0; for (const c of ST.colliders) if (c.type === 'floor' && x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1 && c.y > y) y = c.y; return y; }
-/* the preview of the next throw, as instanced ink dashes (pass 8: the ghost of the last throw, 400 grey dashes along the path, is gone) */
-const dashGeo = new THREE.BoxGeometry(0.014, 0.014, 0.11);
-function dashLine(color, n) { const im = new THREE.InstancedMesh(dashGeo, new ComicMaterial({ world, unlit: true, color, inkWeight: 0, fog: false }), n); im.count = 0; im.userData.noInk = true; im.frustumCulled = false; scene.add(im); return im; }
-const preview = dashLine(HOUSE.magenta, 40);
-const tmpM = new THREE.Matrix4(), tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3(1, 1, 1), Z1 = new THREE.Vector3(0, 0, 1);
-function drawDashes(im, path, every = 4, limit = Infinity) {
-  let n = 0; for (let i = every; i < path.length && i < limit && n < im.instanceMatrix.count; i += every) { const a = path[i - every], b = path[i]; tmpV.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]); const L = tmpV.length() || 1e-6; tmpV.divideScalar(L);
-    tmpQ.setFromUnitVectors(Z1, tmpV); tmpS.set(1, 1, Math.max(0.3, L / 0.11 * 0.6)); tmpM.compose(new THREE.Vector3((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2), tmpQ, tmpS); im.setMatrixAt(n++, tmpM); }
+/* the preview of the next throw (pass 10: THE ARC): the first 1.2 s of the flight it would take, as 24 ink dots (one every 0.05 s, 2.5 cm cubes, one
+   instanced mesh), about the length of the hall: enough to see what the pull does, nothing of the streams and the rooms beyond. Pass 8 removed the
+   ghost of the last throw; pass 4's six dashes over 0.2 s showed a first-time player nothing. */
+const dotGeo = new THREE.BoxGeometry(0.025, 0.025, 0.025);
+const preview = (() => { const im = new THREE.InstancedMesh(dotGeo, new ComicMaterial({ world, unlit: true, color: HOUSE.ink, inkWeight: 0, fog: false }), 30); im.count = 0; im.userData.noInk = true; im.frustumCulled = false; scene.add(im); return im; })();
+const tmpM = new THREE.Matrix4();
+function drawDots(im, path, every = 6, limit = 144) {
+  let n = 0; for (let i = every; i < path.length && i <= limit && n < im.instanceMatrix.count; i += every) { tmpM.makeTranslation(path[i][0], path[i][1], path[i][2]); im.setMatrixAt(n++, tmpM); }
   im.count = n; im.instanceMatrix.needsUpdate = true;
 }
 function applyLook(L) {
@@ -126,14 +131,13 @@ function refreshReadout() { if (DEBUG) console.log(`yaw ${S.yaw.toFixed(0)}° ·
 function previewDots() {
   if (S.mode !== 'aim' && S.mode !== 'start') { preview.count = 0; preview.instanceMatrix.needsUpdate = true; return; }
   const c = cardNow(P); const r = simulate(ST, { x: S.x, yaw: S.yaw, loft: G.lofts[S.loftI], power: (S.speed - G.min) / (c.cap - G.min) }, c);
-  drawDashes(preview, r.path, 4, 26);
+  drawDots(preview, r.path);
 }
 
 /* ───────────── the throw and the flight ───────────── */
 function throwPlane(L) {
   const card = cardNow(P); const r = simulate(ST, L, card); S.run = r; S.lastThrow = L; S.tp = 0; S.fired = 0; S.reached = 0; S.crossed = 0; S.mode = 'flight'; S.throws++; S.sootUntil = -1; S.dripsUntil = -1; S.tumble = 0;
   hud.showCards(false); hud.hint(false); hud.panel(null); S.speed = G.min + (card.cap - G.min) * L.power; refreshReadout(); hud.metres(0);
-  const p = planeScreen(); sfx('THWIP!', p.x - 30, p.y - 80, 3);
   hand.userData.set(1); handT = clock.t; fan.visible = false; preview.count = 0; preview.instanceMatrix.needsUpdate = true;
   for (const s of slices) s.visible = false; slicesLanded = [false, false]; { const T = TOASTER(); if (T && T.userData.arm) T.userData.arm(false); }
   S.fwd.copy(aimDir(L.yaw, L.loft)); drone.init = false; marks.visible = false;
@@ -167,7 +171,7 @@ function endFlight() {
 function payOut() {
   const r = S.run, d = r.result === 'gate' ? LEVEL.length : progressOf(ST, r.path), fin = r.result === 'gate', last = r.path[r.path.length - 1];
   const pay = settle(P, d, fin, last, LEVEL); if (!NOSAVE) save(SAVE); hud.cash(P.cash); S.pay = pay;
-  const lines = [`<b>${d.toFixed(1)} m · ${S.endInfo.msg}</b>`, `<span class="line">+$${pay.perThrow} for the throw · +$${pay.metres} for the metres${pay.mult > 1 ? ` · ×${pay.mult.toFixed(1)}` : ''}</span>`];
+  const lines = [`<b>${dist(d)} · ${S.endInfo.msg}</b>`, `<span class="line">+$${pay.perThrow} for the throw · +$${pay.metres} for the distance${pay.mult > 1 ? ` · ×${pay.mult.toFixed(1)}` : ''}</span>`];
   for (const f of pay.firsts) lines.push(`<span class="line first">${f.text}</span>`);
   if (pay.finishBonus) lines.push(`<span class="line first">${LEVEL.finishLine.replace(/!$/, '')}: +$${pay.finishBonus}</span>`);
   if (pay.record && d > 0) { lines.push(`<span class="line rec">NEW RECORD!</span>`); placePennant(P.best); if (pennant) pennant.userData.hop(clock.t12); const p = planeScreen(); sfx('NEW RECORD!', p.x, p.y - 150, 3); }
@@ -182,8 +186,8 @@ function startLine() {
 function titleCard() { S.mode = 'title'; hud.title(INFO, LEVEL, true); titleT = clock.t; applyLook(look0); hand.visible = true; fan.visible = false; hud.showCards(false); hud.hint(false); drone.init = false; }
 document.getElementById('title').addEventListener('pointerdown', e => { if (S.mode === 'title') { startLine(); e.preventDefault(); } });
 function finishCard() {
-  const next = NEXT ? `<button type="button" class="next" id="nextBtn">NEXT: ${NEXT.title}</button>` : `<span class="line">THE END OF THE BOOK, FOR NOW</span>`;
-  hud.panel(`<b>${LEVEL.finishLine}</b><span class="line">throw ${P.runs} · ${LEVEL.length} m in one throw${P.firstFinishRun && P.firstFinishRun < P.runs ? ` · first on throw ${P.firstFinishRun}` : ''}</span>${S.pay && S.pay.finishBonus ? `<span class="line first">+$${S.pay.finishBonus}</span>` : ''}${next}<span class="tap">TAP TO KEEP THROWING</span>`);
+  const next = NEXT ? `<button type="button" class="next" id="nextBtn">NEXT: ${NEXT.title}</button>` : `<span class="line">MORE PLACES SOON</span>`;
+  hud.panel(`<b>${LEVEL.finishLine}</b><span class="line">throw ${P.runs} · ${dist(LEVEL.length)} in one throw${P.firstFinishRun && P.firstFinishRun < P.runs ? ` · first on throw ${P.firstFinishRun}` : ''}</span>${S.pay && S.pay.finishBonus ? `<span class="line first">+$${S.pay.finishBonus}</span>` : ''}${next}<span class="tap">TAP TO KEEP THROWING</span>`);
   S.mode = 'finish'; const nb = document.getElementById('nextBtn'); if (nb) nb.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openLevels(NEXT.id); });
 }
 function onBuy(key) {
@@ -207,11 +211,11 @@ document.getElementById('levelsBtn').addEventListener('click', () => { closePaus
 /* ───────────── input: the gesture, the keyboard, the buttons ───────────── */
 const gesture = attachGesture(canvas, G, {
   cap, canStart: e => (S.mode === 'start') && e.target === canvas && e.clientY > innerHeight * 0.28 && !paused && !levelsOpen,
-  onStart() { S.mode = 'aim'; S.dragging = true; hud.showCards(false); hud.hint(false); S.pullBack = 0; },
-  onMove(live) { S.speed = live.speed; S.locked = live.locked; S.yaw = live.yaw; S.pullBack = Math.min(live.back / live.pull.full, (cap() - G.min) / (G.max - G.min)); if (live.rising) S.loftI = live.loftIndex; previewDots(); },
+  onStart() { S.mode = 'aim'; S.dragging = true; hud.showCards(false); hud.hint(false); S.pullBack = 0; S.loftI = LEVEL_NOTCH; },   // pass 10: a fresh pull previews a level throw
+  onMove(live) { S.speed = live.speed; S.locked = live.locked; S.yaw = live.yaw; S.pullBack = Math.min(live.back / live.pull.full, (cap() - G.min) / (G.max - G.min)); S.loftI = live.rising ? live.loftIndex : LEVEL_NOTCH; previewDots(); },   // the loft is the level notch until the finger rises (pass 10 §4.2)
   onEnd(d) { S.dragging = false; S.lastDecision = d; if (S.mode !== 'aim') return;
     if (d.action === 'throw') { S.yaw = d.yaw; S.loftI = d.loftIndex; S.speed = d.speed; throwPlane({ x: S.x, yaw: d.yaw, loft: d.loft, power: d.power }); }
-    else { S.pullBack = 0; S.locked = false; const p = planeScreen(); if (d.reason !== 'a tap') sfx('…', p.x, p.y - 60, 1); S.mode = 'start'; hud.showCards(true); previewDots(); } },
+    else { S.pullBack = 0; S.locked = false; S.mode = 'start'; hud.showCards(true); previewDots(); } },   // pass 10: only a tap (or an escape) ends here, and it needs no lettering
 });
 canvas.addEventListener('pointerdown', e => { if (levelsOpen || paused) return; if (S.mode === 'finish' || S.mode === 'title') { startLine(); e.preventDefault(); } });
 const keys = {};
@@ -239,12 +243,11 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; keys[k] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 /* pause: twos, LEVELS, the two resets (hold 2 s; RESET EVERYTHING arms on the first hold and wipes on a second), the frame rate, storage */
-function openPause() { if (paused) return; paused = true; hud.pause(true); document.getElementById('twosBtn').textContent = TWOS_LABELS[twos]; }
+function openPause() { if (paused) return; paused = true; hud.pause(true); }
 function closePause() { paused = false; hud.pause(false); for (const h of holds) h.clear(); disarmAll(); }
-function setTwos(n) { twos = n; engine.twos = twos; kitHud.setTwos(TWOS_LABELS[twos]); document.getElementById('twosBtn').textContent = TWOS_LABELS[twos]; SAVE.twos = twos; if (!NOSAVE) save(SAVE); }
+function setTwos(n) { twos = n; engine.twos = twos; kitHud.setTwos(TWOS_LABELS[twos]); SAVE.twos = twos; if (!NOSAVE) save(SAVE); }   // pass 10: the T key on the desk; the pause menu's ON TWOS button is gone
 hud.els.pauseBtn.addEventListener('click', () => paused ? closePause() : openPause());
 document.getElementById('resumeBtn').addEventListener('click', closePause);
-document.getElementById('twosBtn').addEventListener('click', () => setTwos((twos + 1) % 3));
 const holds = [];
 function holdButton(id, ms, onDone) {
   const btn = document.getElementById(id); const h = { btn, t0: null, clear() { h.t0 = null; btn.classList.remove('armed'); btn.querySelector('i').style.width = '0%'; },

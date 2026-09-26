@@ -3,6 +3,7 @@
  * hint, sound effects sized by the book's five steps. Pass 7 adds the title card of a level and the level select (six stock cards in a strip).
  * The kit's caption, name card and counter are hidden by the page's CSS. */
 import { unlocked, prevOf } from '../level/index.js';
+import { dist } from './units.js';   // pass 10: feet on the page (?units=m for metres)
 
 const $ = id => document.getElementById(id);
 const fmt$ = n => '$' + Math.round(n).toLocaleString('en-US').replace(/,/g, ' ');
@@ -15,11 +16,11 @@ export function mountGameHUD(kitHud) {
     cash(n) { els.cash.textContent = fmt$(n); },
     /** the one top-left slot: 'rest' = the personal best in a stock tag; 'flight' = the metres in Bangers, magenta */
     slot(text, mode = 'rest') { els.slot.textContent = text; els.slot.className = 'slot ' + mode; },
-    best(best, level) { api.slot(best && best.d > 0 ? `BEST ${best.d.toFixed(1)} m` : `${level.length.toFixed(1)} m ${level.toGo || 'TO THE FINISH'}`, 'rest'); },
-    metres(d) { api.slot(`${Math.max(0, d).toFixed(1)} m`, 'flight'); },
+    best(best, level) { api.slot(best && best.d > 0 ? `BEST ${dist(best.d)}` : `${dist(level.length)} ${level.toGo || 'TO THE FINISH'}`, 'rest'); },
+    metres(d) { api.slot(dist(d), 'flight'); },
     /** the three cards; onBuy(key) */
     cards(list, onBuy) { els.cards.innerHTML = list.map(c => `<button type="button" class="card ${c.affordable ? 'can' : 'cant'} ${c.maxed ? 'maxed' : ''}" data-key="${c.key}" ${c.maxed || !c.affordable ? 'aria-disabled="true"' : ''}>
-        <b>${c.title} <i>${c.level}</i></b><span class="num">${c.next}</span><span class="unlock">${c.maxed ? 'the arm as strong as it goes' : esc(c.unlock)}</span>
+        <b>${c.title} <i>${c.level}</i></b><span class="num">${c.next}</span><span class="unlock">${c.maxed ? 'as strong as an arm gets' : esc(c.unlock)}</span>
         <span class="price"><svg viewBox="0 0 100 100" aria-hidden="true"><polygon points="${STAR}"/></svg><span>${c.maxed ? 'MAX' : fmt$(c.price)}</span></span></button>`).join('');
       for (const b of els.cards.querySelectorAll('.card')) b.addEventListener('click', e => { e.preventDefault(); if (b.classList.contains('can')) onBuy(b.dataset.key); }); },
     showCards(on) { els.cards.classList.toggle('off', !on); els.cash.classList.toggle('off', !on); },
@@ -34,7 +35,7 @@ export function mountGameHUD(kitHud) {
       els.strip.innerHTML = list.map(L => {
         const s = sv.levels && sv.levels[L.id], open = unlocked(L.id, sv), prev = prevOf(L.id);
         const st = !open ? 'locked' : !s || s.runs === 0 ? 'new' : s.finishes > 0 ? 'done' : 'played';
-        const line = st === 'locked' ? `FINISH ${prev ? esc(prev.title) : 'THE LEVEL BEFORE'} FIRST` : st === 'new' ? 'NEW' : st === 'done' ? `IN ONE · ${s.runs} THROWS · BEST ${s.best ? s.best.d.toFixed(1) : '0.0'} m` : `BEST ${s.best ? s.best.d.toFixed(1) : '0.0'} m · ${s.runs} THROW${s.runs === 1 ? '' : 'S'}`;
+        const line = st === 'locked' ? `FINISH ${prev ? esc(prev.title) : 'THE LEVEL BEFORE'} FIRST` : st === 'new' ? 'NEW' : st === 'done' ? `IN ONE · ${s.runs} THROWS · BEST ${dist(s.best ? s.best.d : 0)}` : `BEST ${dist(s.best ? s.best.d : 0)} · ${s.runs} THROW${s.runs === 1 ? '' : 'S'}`;
         return `<button type="button" class="lvl ${st}${L.id === currentId ? ' current' : ''}" data-id="${L.id}" ${st === 'locked' ? 'aria-disabled="true"' : ''}><span class="n">LEVEL ${L.n}</span><b>${esc(L.title)}</b><span class="tag">${esc(L.tagline)}</span><span class="st">${line}</span></button>`;
       }).join('');
       for (const b of els.strip.querySelectorAll('.lvl')) b.addEventListener('click', e => { e.preventDefault(); if (b.classList.contains('locked')) { b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake'); return; } onPick(b.dataset.id); });
