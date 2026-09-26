@@ -6,7 +6,8 @@
  * NEXT) → START LINE. PAUSE and the LEVEL SELECT are overlays; choosing a level writes the save's `current` and reloads (a boot).
  * Query flags: ?shot=1&t=N (a proof frame: fixed steps, then the title SHOT-READY) · ?launch=x,yaw,loft,v (throw a line on load) ·
  * ?card=A,P&cash=N (a card for proofs; not saved) · ?level=id (play any level in memory; not saved) · ?screen=aim|pay|finish|pause|levels|title
- * (stage a screen) · ?tempo=1 · ?dpr= · ?merge=0 · ?hud=0 · ?seed=
+ * (stage a screen) · ?tempo=1 · ?dpr= · ?merge=0 · ?hud=0 · ?seed= · ?x= (the stance, for frames)
+ * Pass 8 (QUALITY OF LIFE): the drone is held under the ceiling, no stream dashes, no ghost of the last throw, the tempo 0.6 from the level.
  */
 import { THREE, ComicWorld, ComicMaterial, HullMaterial, ComicEngine, SteppedClock, mountHUD, TWOS_LABELS, parseQuery, installErrorTitle, inkAll, col, mix } from '../kit/comic3d.js';
 import { buildPaperPlane } from '../kit/paper-plane.js';
@@ -55,7 +56,7 @@ try { await Promise.race([Promise.all([document.fonts.load('100px Bangers'), doc
 
 const camera = new THREE.PerspectiveCamera(LEVEL.cameras.aim.fov, 1, 0.05, 900);
 const hullMat = new HullMaterial({ world }), hullNoFog = new HullMaterial({ world, fog: false });
-const W = buildWorld(world, LEVEL, { hullMat, seed: Q.seed, noMerge: QS.get('merge') === '0' });
+const W = buildWorld(world, LEVEL, { hullMat, seed: Q.seed, noMerge: QS.get('merge') === '0', streams: false });   // pass 8: the streams' dashes were clutter; their physics stays
 const scene = W.scene;
 const plane = buildPaperPlane(world, { hullMat: hullNoFog.withMul(0.45), seed: 21 }); plane.scale.setScalar(LEVEL.plane.scale); scene.add(plane);
 const K0 = W.kits[LEVEL.scenes[0].key], KK = (LEVEL.toast && W.kits[LEVEL.toast.scene]) || K0;
@@ -76,10 +77,10 @@ function placePennant(best) {
 }
 /** the floor under a point (the mall's balcony is a storey up): the highest solid floor whose footprint holds it, else the ground */
 function floorAt(x, z) { let y = 0; for (const c of ST.colliders) if (c.type === 'floor' && x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1 && c.y > y) y = c.y; return y; }
-/* the ghost of the last throw and the preview of the next, as instanced ink dashes */
+/* the preview of the next throw, as instanced ink dashes (pass 8: the ghost of the last throw, 400 grey dashes along the path, is gone) */
 const dashGeo = new THREE.BoxGeometry(0.014, 0.014, 0.11);
 function dashLine(color, n) { const im = new THREE.InstancedMesh(dashGeo, new ComicMaterial({ world, unlit: true, color, inkWeight: 0, fog: false }), n); im.count = 0; im.userData.noInk = true; im.frustumCulled = false; scene.add(im); return im; }
-const ghost = dashLine(mix(HOUSE.ink, HOUSE.stock, 0.55), 400), preview = dashLine(HOUSE.magenta, 40);
+const preview = dashLine(HOUSE.magenta, 40);
 const tmpM = new THREE.Matrix4(), tmpV = new THREE.Vector3(), tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3(1, 1, 1), Z1 = new THREE.Vector3(0, 0, 1);
 function drawDashes(im, path, every = 4, limit = Infinity) {
   let n = 0; for (let i = every; i < path.length && i < limit && n < im.instanceMatrix.count; i += every) { const a = path[i - every], b = path[i]; tmpV.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]); const L = tmpV.length() || 1e-6; tmpV.divideScalar(L);
@@ -157,7 +158,7 @@ function cutTo(i) {
 }
 function endFlight() {
   const r = S.run, { msg, what } = endLetters(r, LEVEL); const p = planeScreen(); sfx(msg, p.x + 40, p.y - 70, r.result === 'gate' ? 5 : r.result === 'crumple' ? 4 : 3);
-  if (r.result === 'gate') flash = 0.35; drawDashes(ghost, r.path, 5); S.mode = 'end'; S.endT = 0; S.endPhase = 0; S.endInfo = { msg, what };
+  if (r.result === 'gate') flash = 0.35; S.mode = 'end'; S.endT = 0; S.endPhase = 0; S.endInfo = { msg, what };
 }
 function payOut() {
   const r = S.run, d = r.result === 'gate' ? LEVEL.length : progressOf(ST, r.path), fin = r.result === 'gate', last = r.path[r.path.length - 1];
@@ -254,6 +255,20 @@ holdButton('resetBtn', 2000, () => { resetLevel(SAVE, levelId); if (!NOSAVE) sav
 holdButton('resetAllBtn', 2000, () => { if (!armedAll) { armedAll = true; resetAllBtn.lastChild.textContent = 'ARMED · HOLD AGAIN TO WIPE'; return; } resetAll(); location.href = location.pathname; });
 
 /* ───────────── cameras ───────────── */
+const CLAMP = 0.22;   // pass 8: the drone stays this far under a ceiling (it used to rise through the roof, the cutaway hid the ceiling, and the sky showed over the living room)
+/** the lowest lid over the drone's wanted spot or over the plane, of the lids not below the plane: a ceiling, or a prop box whose id ends in ' roof' (the lanai's cage); null under the sky */
+function ceilingOver(cx, cz, px, pz, py) {
+  let y = null;
+  for (const c of ST.colliders) {
+    let lid, over;
+    if (c.type === 'ceiling') { lid = c.y; over = (x, z) => x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1; }
+    else if (c.type === 'box' && / roof$/.test(c.id)) { lid = c.y0; over = (x, z) => Math.abs(x - c.cx) < c.w / 2 && Math.abs(z - c.cz) < c.d / 2; }
+    else continue;
+    if (lid < py - 0.3) continue;
+    if ((over(cx, cz) || over(px, pz)) && (y === null || lid < y)) y = lid;
+  }
+  return y;
+}
 const drone = { pos: new THREE.Vector3(), look: new THREE.Vector3(), init: false, roll: 0, fov: LEVEL.cameras.aim.fov, kick: new THREE.Vector3() };
 function placeCamera(dt, aspect) {
   const D = LEVEL.cameras.drone, A = LEVEL.cameras.aim; let base = A.fov;
@@ -262,10 +277,12 @@ function placeCamera(dt, aspect) {
     if (!drone.init) { drone.pos.copy(want); drone.look.copy(lookW); drone.init = true; } const k = 1 - Math.exp(-dt * 10); drone.pos.lerp(want, k); drone.look.lerp(lookW, k);
     camera.position.copy(drone.pos); camera.up.set(0, 1, 0); camera.lookAt(drone.look); drone.roll += (0 - drone.roll) * k; camera.rotateZ(drone.roll); base = aspect < 1 ? A.fovPortrait : A.fov; }
   else { const f = S.fwd; const want = plane.position.clone().addScaledVector(f, -D.back).add(new THREE.Vector3(0, D.up, 0)), lookW = plane.position.clone().addScaledVector(f, D.ahead);
+    const lid = ceilingOver(want.x, want.z, plane.position.x, plane.position.z, plane.position.y); if (lid != null) want.y = Math.min(want.y, lid - CLAMP);
     if (!drone.init) { drone.pos.copy(want); drone.look.copy(lookW); drone.init = true; } const kP = 1 - Math.exp(-dt * D.lagPos), kL = 1 - Math.exp(-dt * D.lagLook); drone.pos.lerp(want, kP); drone.look.lerp(lookW, kL);
     { const rel = drone.pos.clone().sub(plane.position); rel.addScaledVector(f, -rel.dot(f) - D.back); drone.pos.copy(plane.position).add(rel); }
+    if (lid != null) drone.pos.y = Math.min(drone.pos.y, lid - CLAMP);
     drone.kick.multiplyScalar(Math.exp(-dt / 0.09));
-    camera.position.copy(drone.pos).add(drone.kick); camera.up.set(0, 1, 0); camera.lookAt(drone.look); const wantRoll = S.sBank * 0.35; drone.roll += (wantRoll - drone.roll) * kP; camera.rotateZ(drone.roll);
+    camera.position.copy(drone.pos).add(drone.kick); if (lid != null) camera.position.y = Math.min(camera.position.y, lid - CLAMP); camera.up.set(0, 1, 0); camera.lookAt(drone.look); const wantRoll = S.sBank * 0.35; drone.roll += (wantRoll - drone.roll) * kP; camera.rotateZ(drone.roll);
     base = (aspect < 1 ? D.fovPortrait : D.fov) + D.fovBoost * boostNow(); }
   drone.fov += (base - drone.fov) * Math.min(1, dt * 6);
   if (Math.abs(camera.fov - drone.fov) > 0.01 || camera.aspect !== aspect) { camera.fov = drone.fov; camera.aspect = aspect; camera.updateProjectionMatrix(); }
@@ -329,6 +346,7 @@ hud.hide(hidden); if (Q.shot && !Q.hud) hud.hide(true); if (Q.shot) document.bod
 const SCREEN = QS.get('screen');
 if (SCREEN === 'title' || (firstEntry && !Q.shot && !SCREEN && !QS.get('launch'))) titleCard(); else startLine();
 if (QS.get('launch')) { const [x, yaw, loft, v] = QS.get('launch').split(',').map(Number); const c = cap(); S.x = Math.min(LEVEL.launch.x[1], Math.max(LEVEL.launch.x[0], x || 0)); const li = Math.max(0, G.lofts.indexOf(loft)); S.loftI = li; S.yaw = yaw || 0; S.speed = Math.min(c, Math.max(G.min, v || 6)); throwPlane({ x: S.x, yaw: S.yaw, loft: G.lofts[li], power: (S.speed - G.min) / (c - G.min) }); }
+if (QS.has('x')) { S.x = Math.min(LEVEL.launch.x[1], Math.max(LEVEL.launch.x[0], +QS.get('x') || 0)); previewDots(); }   // the stance, for frames
 if (SCREEN === 'aim') { S.mode = 'aim'; hud.showCards(false); hud.hint(false); S.pullBack = Math.min(0.62, (cap() - G.min) / (G.max - G.min)); S.yaw = -4; S.loftI = 3; S.speed = Math.min(cap(), G.min + (G.max - G.min) * 0.62); S.locked = G.min + (G.max - G.min) * 0.62 > cap(); previewDots(); }
 if (SCREEN === 'pay' || SCREEN === 'finish') { const c = cardNow(P); const fin = SCREEN === 'finish'; throwPlane(fin ? { x: 0, yaw: 5, loft: 14, power: (6.5 - G.min) / (c.cap - G.min) } : { x: 0.6, yaw: 2, loft: 26, power: 1 }); while (S.mode === 'flight') { clock.fixed(1 / 60); simulateFrame(1 / 60); } S.endT = 1; simulateFrame(0); if (fin) finishCard(); }
 if (SCREEN === 'pause') openPause();

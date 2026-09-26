@@ -1,5 +1,5 @@
 /* game/world.js — a level in one scene: its rooms from the kit's builder, the game's pieces beside them, the sky, the cutaway, the static
- * merge (a phone's draw calls) and the room culling · design pass 4 §3.7, §3.9; pass 7: any level (the house or a greybox level)
+ * merge (a phone's draw calls) and the room culling · design pass 4 §3.7, §3.9; pass 7: any level (the house or a greybox level); pass 8: no stream dashes, the game's cutaway
  *
  *   const W = buildWorld(world, LEVEL, { hullMat, seed }) → { scene, rooms, extras, kits, textures, mats, hullMat, tick(t, t12, stepped), cull(camZ), stats }
  * The kit's buildScene gets each scene without the kinds it does not know (and without the house's pool, which the game draws); nothing in kit/ changes.
@@ -91,17 +91,18 @@ export function buildWorld(world, LEVEL, o = {}) {
     const r = mulberry32((o.seed ?? 7) * 101 + sc.n + 40);
     const g = buildScene(world, kitScene(sc), { hullMat, textures, mats, seed: o.seed, sky: false });
     g.position.z = LEVEL.place[sc.key]; rooms[sc.key] = g; scene.add(g); const K = g.userData.kit; kits[sc.key] = K;
+    g.userData.walls.forEach((w, i) => { const wl = sc.walls[i]; w.userData.behindHand = !!wl && Math.min(wl.a[1], wl.b[1]) + LEVEL.place[sc.key] > LEVEL.launch.z + 0.02; });   // pass 8: a wall wholly behind the hand is never drawn (the aim camera stands outside the front door; at the right stance it looked into the door wall's stucco)
     const props = g.children.find(c => c.name === 'props');
     const place = (piece, x, y, z, ry = 0) => { piece.position.set(x, y, z); piece.rotation.y = ry; inkAll(piece, hullMat, 500 + sc.n * 50 + props.children.length); props.add(piece); dyn.push(piece); return piece; };
     for (const p of sc.props) {
       if (p.kind === 'smoke') { extras[p.id] = place(EXTRA.ovenSmoke(K, p, r), p.x, p.y, p.z); continue; }   // the house's oven smoke follows its own curve
       const make = EXTRA[p.kind]; if (!make) continue;
       extras[p.id] = place(make(K, p, r), p.x, p.y ?? 0, p.z, p.ry || 0);
-      if (p.boost && p.boost.accel) { const wd = instancedWind(K, p.boost, r, p.id); g.add(wd); dyn.push(wd); }   // the game's own pieces draw their streams
+      if (p.boost && p.boost.accel && o.streams !== false) { const wd = instancedWind(K, p.boost, r, p.id); g.add(wd); dyn.push(wd); }   // the game's own pieces draw their streams (pass 8: the game asks for none; the streams' physics stays)
     }
     for (const wd of g.children.filter(c => c.name.startsWith('wind-'))) {   // the kit's streams (a mesh per dash) become one instanced mesh each
       if (wd.isInstancedMesh) continue; const p = sc.props.find(q => 'wind-' + q.id === wd.name); if (!p || !p.boost) continue;
-      g.remove(wd); wd.traverse(o2 => { if (o2.isMesh && o2.geometry) o2.geometry.dispose(); }); const im = instancedWind(K, p.boost, r, p.id); g.add(im); dyn.push(im); }
+      g.remove(wd); wd.traverse(o2 => { if (o2.isMesh && o2.geometry) o2.geometry.dispose(); }); if (o.streams !== false) { const im = instancedWind(K, p.boost, r, p.id); g.add(im); dyn.push(im); } }
     for (const range of sc.props.filter(p => p.oven)) extras['oven door'] = place(EXTRA.ovenDoor(K, range), range.x, 0, range.z);   // the house's open oven
     const pool = sc.floors.find(f => f.id === 'pool'); if (pool) extras.pool = place(EXTRA.pool(K, pool, r), 0, 0, 0);            // the house's pool (the game draws it)
     if (!o.noMerge) stats.merged[sc.key] = mergeStatic(g);
@@ -113,8 +114,12 @@ export function buildWorld(world, LEVEL, o = {}) {
     scene, rooms, extras, kits, textures, mats, hullMat, stats,
     /** the rooms' own motion on twos (the kit's) and the game's pieces */
     tick(t, t12, stepped, f) { for (const g of roomList) g.userData.update(t, t12, stepped); if (stepped) for (const d of dyn) if (d.userData.tick) d.userData.tick(f, t12); },
-    /** the cutaway: the walls between the camera and the room vanish (the kit's rule) */
-    cutaway(camPos) { for (const g of roomList) g.userData.cutaway(camPos.clone().sub(g.position)); },
+    /** the cutaway. Pass 8 ('ceilings', the default): only a ceiling the camera is above vanishes (the drone stays under them anyway), every wall is drawn
+     *  from both sides except the walls wholly behind the hand, so a wall the plane can hit is always seen (the hall's end wall, lintel and all, was cut
+     *  away from the hall). 'kit': the kit's dollhouse rule, for a camera outside the house. */
+    cutaway(camPos, mode = 'ceilings') { for (const g of roomList) { const cam = camPos.clone().sub(g.position); if (mode === 'kit') { g.userData.cutaway(cam); continue; }
+      for (const w of g.userData.walls) w.visible = !w.userData.behindHand; for (const c of g.userData.ceilings) c.visible = cam.y < c.userData.ceilY;
+      const props = g.children.find(c => c.name === 'props'); if (props) for (const k of props.children) { if (k.userData.wall) k.visible = true; if (k.userData.ceilY) k.visible = cam.y < k.userData.ceilY; } } },
     /** a room's props are drawn only within 3 m behind and 30 m ahead of the camera (the run flies toward −z) */
     cull(camZ, on = true) { for (const g of roomList) { const props = g.children.find(c => c.name === 'props'); if (!props) continue; const [z0, z1] = g.userData.zRange; props.visible = !on || (z0 < camZ + 3 && z1 > camZ - 30); } },
   };

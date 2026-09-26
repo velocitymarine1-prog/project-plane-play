@@ -66,7 +66,7 @@ export const LEVEL = {
   scenes, place, launch: LAUNCH, finish: FINISH, checkpoints: CHECKPOINTS, length: LENGTH, finishBonus: 150,
   plane: { scale: 0.04, radius: RUN.plane.radius },   // pass 6: the mini plane, two thirds of the kit's 0.06 (0.29 m long); the sphere stays 0.15 m and now encloses it
   glide: { g: RUN.glide.g, trim: 7.0, dt: 1 / 120, maxT: RUN.glide.maxT },
-  tempo: 0.8,
+  tempo: 0.8,   // pass 3; pass 8 sets 0.6 below
   gauge: { min: 4, max: 12, lofts: [-12, -4, 5, 14, 26], yaw: 15, step: 0.05, pullFrac: 0.38, yawFrac: 0.19, cancelPx: 24, swipePxPerS: 150, swipeMs: 60 },
   soft: { bleed: 0.4, bounce: 0.3, headOn: 0.7, minSpeed: 1.5, maxScrapes: 12 },
   bonk: { e0: 0.5, eSlope: 0.035, eMin: 0.15, mu: 0.85, max: 6, steps: [2, 4, 6, 8], letters: ['bonk', 'BONK', 'BONK!', 'BONK!!', 'KRUNCH!'] },
@@ -93,4 +93,28 @@ Object.assign(LEVEL, { id: 'house', n: 1, name: 'THE HOUSE', finishLine: 'THE HO
 ['kitchen', 'pilates', 'backyard', 'backyard'].forEach((k, i) => { LEVEL.checkpoints[i].next = k; });   // the scene whose light the cut brings in
 Object.assign(LEVEL.toast, { id: 'toaster', scene: 'kitchen', eventId: 'kitchen/toaster', color: 'toast', letters: { pop: 'POP!', ting: 'TING!', hit: 'CRUMB!' },
   counter: { x: [-1.4, 1.2], z: [LEVEL.place.kitchen + 0.45, LEVEL.place.kitchen + 1.45], y: 0.94 } });   // where a slice lands on the counter, not the floor
+/* ── pass 8: QUALITY OF LIFE (26 September 2026, docs/design/08-quality.md), applied last. Isaac's round after playing on the phone: the hand half a
+   metre lower with the hall's furniture off its line and the hall's invisible end lintel gone; the plane's true collision shape (game/glide.js reads
+   plane.shape; the plane is the same in every level); the props as tall as they are drawn; the ceilings a metre higher ("without changing anything
+   else": the slabs and the walls rise, what hangs from a ceiling hangs from the new one with the pendants' cords lengthened so their shades stay
+   where they were, the lanai's cage grows with the rooms; the door heads, the windows, the streams and the furniture stay); the playback at 0.6 ── */
+export const PASS8 = { launchY: 1.0, launchX: [-0.3, 0.3], shape: { rh: 0.12, rv: 0.06 }, tempo: 0.6, ceilingUp: 1.0, ceilingWas: 2.7 };
+export function applyPass8(LV = LEVEL) {
+  const F = scene('foyer'), K = scene('kitchen'), P = scene('pilates');
+  LV.launch.y = PASS8.launchY; LV.launch.x = PASS8.launchX.slice(); F.launch.y = PASS8.launchY; F.launch.x = PASS8.launchX.slice();   // the hand at 1.0 m, the window centred on the door
+  LV.plane.shape = Object.assign({}, PASS8.shape);                                                                                  // the flat ellipsoid (0.12 sideways and along the flight, 0.06 up and down)
+  F.walls = F.walls.filter(w => w.id !== 'hall mouth'); F.gate.y = [0, PASS8.ceilingWas + PASS8.ceilingUp];                          // the hall opens into the living room at the full height
+  F.props.find(p => p.id === 'shoe tower').x = 0.7; for (const id of ['sofa', 'rug']) F.props.find(p => p.id === id).x = -1.6;      // the tower against the right wall, the sofa left of the hall's mouth
+  const fan = P.props.find(p => p.id === 'drum fan'); if (fan) fan.h = 0.87; for (const p of P.props) if (p.kind === 'eggChair') p.h = 1.16;   // as drawn
+  const up = PASS8.ceilingUp, was = PASS8.ceilingWas;
+  for (const sc of [F, K, P]) {                                                                                                     // the ceilings a metre higher
+    for (const c of sc.ceilings) c.y += up;
+    for (const w of sc.walls) w.h += up;
+    for (const p of sc.props) { if (p.y === was && (p.kind === 'pendant' || p.kind === 'flushLight' || p.kind === 'smokeAlarm')) { p.y += up; if (p.kind === 'pendant') p.h += up; } if (p.kind === 'screenPorch') p.h += up; }
+    if (sc !== F && sc.gate && sc.gate.y) sc.gate.y[1] += up;
+  }
+  LV.tempo = PASS8.tempo; LV.pass8 = true;
+  return LV;
+}
+applyPass8(LEVEL);
 export { HOUSE, DERIVED, ENV, RUN };
