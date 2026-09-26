@@ -117,4 +117,43 @@ export function applyPass8(LV = LEVEL) {
   return LV;
 }
 applyPass8(LEVEL);
+/* ── pass 9: A LITTLE MORE LIFE (26 September 2026, jumpr t50, docs/design/09-life.md), applied last. Isaac: "make the colors a little more
+   vibrant and also add some wall decor to the walls and maybe a mirror in the foyer on the left side". The colours are level/palette.js (the
+   game fills the kit's palette contract at boot); the decor is data here: every piece hangs on a wall's face (the wall's line ± 0.06, the slab
+   being 12 cm thick), faces the room (ry from the wall's normal: +z 0, +x π/2, −x −π/2), stands at most 3 cm proud of the wall and has no
+   collider (h: 0, no w × d box), so the plane's centre, held 0.12 m off any wall by its own shape, never meets it: the roads and the pay of
+   pass 8 are untouched, and `node tools/ladder.mjs` stays byte for byte. game/pieces.js builds them (print, poster, wallMirror, bunting, the
+   kit's clock, the fridge's drawings); `?decor=0` builds the house without them. ── */
+export const PASS9 = { face: 0.06, proud: 0.03, pieces: 19, drawings: 2 };
+export function applyPass9(LV = LEVEL) {
+  const F = scene('foyer'), K = scene('kitchen'), P = scene('pilates'), R = Math.PI / 2, on = (list, items) => { for (const it of items) list.push(Object.assign({ h: 0, decor: true }, it)); };
+  on(F.props, [
+    { id: 'hall mirror', kind: 'wallMirror', x: -0.89, z: -1.55, y: 1.12, w: 0.5, tall: 0.9, d: 0.03, ry: R, color: 'cobalt' },              // THE HALL MIRROR: the left wall, just past the basket, eye height; a cobalt arch like the front door
+    { id: 'gallery house', kind: 'print', x: 0.89, z: -1.15, y: 1.78, w: 0.34, tall: 0.44, d: 0.025, ry: -R, art: 'house', color: 'stock' },   // the gallery of three above the shoe tower (odd, left-heavy, one hung crooked)
+    { id: 'gallery plane', kind: 'print', x: 0.89, z: -1.7, y: 1.74, w: 0.5, tall: 0.36, d: 0.025, ry: -R, art: 'plane', color: 'tangerine' },
+    { id: 'gallery sun', kind: 'print', x: 0.89, z: -2.22, y: 1.82, w: 0.3, tall: 0.3, d: 0.025, ry: -R, art: 'sun', color: 'stock', tilt: 0.07 },
+    { id: 'living clock', kind: 'clock', x: 0, z: -7.98, y: 3.0, w: 0.04, d: 0.5, ry: -R, color: 'red' },                                    // the living room's cyan wall, the 1.5 m of it over the arch that the drone sees down the hall: the clock at the centre …
+    { id: 'cover print', kind: 'print', x: -1.05, z: -7.94, y: 2.4, w: 0.72, tall: 0.92, d: 0.025, art: 'cover', color: 'stock', frame: 0.045 },   // … PAGE ONE's cover to its left, the cardinal to its right (three, left-heavy)
+    { id: 'cardinal print', kind: 'print', x: 1.05, z: -7.94, y: 2.5, w: 0.55, tall: 0.44, d: 0.025, art: 'cardinal', color: 'stock' },
+    { id: 'boat print', kind: 'print', x: -2.45, z: -7.94, y: 1.6, w: 0.6, tall: 0.45, d: 0.025, art: 'boat', color: 'stock' },              // the panels beside the arch, seen when a throw strays: the paper boat (the plane's cousin) and the palm
+    { id: 'palm print', kind: 'print', x: 2.45, z: -7.94, y: 1.6, w: 0.55, tall: 0.42, d: 0.025, art: 'palm', color: 'stock' },
+  ]);
+  on(K.props, [
+    { id: 'bunting', kind: 'bunting', x: -0.35, z: -1.94, y: 3.3, w: 4.6, d: 0.02, sag: 0.2, n: 11 },                                         // the back wall under the raised ceiling: its flags hang 2.9 … 3.3 m, a metre over the window's head and off the drone's lens
+    { id: 'pie print', kind: 'print', x: -3.2, z: -1.94, y: 1.75, w: 0.5, tall: 0.4, d: 0.025, art: 'pie', color: 'stock' },                // just left of the back door's casing, on the back-door road: the pie that is burning
+    { id: 'toast print', kind: 'print', x: 3.0, z: -1.94, y: 1.7, w: 0.44, tall: 0.4, d: 0.025, art: 'toast', color: 'teal' },               // just right of the gym door's casing, on the gym-door road: POP!
+    { id: 'menu board', kind: 'print', x: -0.3, z: -1.94, y: 2.32, w: 0.6, tall: 0.5, d: 0.025, art: 'menu', color: 'oak', frame: 0.03 },     // the chalkboard over the window, under the bunting: TODAY: PIE!
+    { id: 'calendar', kind: 'poster', x: 4.54, z: 0.2, y: 1.5, w: 0.32, tall: 0.44, d: 0.01, ry: -R, art: 'calendar', color: 'red' },        // the right wall between the fridge and the fan
+  ]);
+  K.props.find(p => p.id === 'fridge').drawings = ['crayonPlane', 'crayonHouse'];                                                         // a child's drawings under magnets on the fridge's door
+  on(P.props, [
+    { id: 'wash poster', kind: 'poster', x: -3.5, z: -2.04, y: 1.45, w: 0.5, tall: 0.7, d: 0.01, art: 'wash', color: 'magenta', tilt: -0.03 },   // the laundry's back wall: WASH · DRY · FLY!, and the clouds by the arch
+    { id: 'clouds print', kind: 'print', x: 0.1, z: -2.04, y: 1.55, w: 0.5, tall: 0.38, d: 0.025, art: 'clouds', color: 'stock' },
+    { id: 'stretch poster', kind: 'poster', x: 2.5, z: -2.04, y: 2.5, w: 0.5, tall: 0.7, d: 0.01, art: 'stretch', color: 'cobalt', tilt: 0.03 },   // the Pilates room's back wall over the slider, the 1.4 m the drone sees through the gym door: STRETCH! and the 1st rosette
+    { id: 'rosette print', kind: 'print', x: 3.8, z: -2.04, y: 2.6, w: 0.4, tall: 0.5, d: 0.025, art: 'rosette', color: 'yellow' },
+    { id: 'pool print', kind: 'print', x: 1.06, z: -1.3, y: 1.6, w: 0.6, tall: 0.45, d: 0.025, ry: R, art: 'pool', color: 'stock' },         // the Pilates side of the divider, past the arched mirror, seen when a throw hugs the left: the pool, the exam
+  ]);
+  LV.pass9 = true; return LV;
+}
+applyPass9(LEVEL);
 export { HOUSE, DERIVED, ENV, RUN };

@@ -1,13 +1,35 @@
 /* game/world.js — a level in one scene: its rooms from the kit's builder, the game's pieces beside them, the sky, the cutaway, the static
  * merge (a phone's draw calls) and the room culling · design pass 4 §3.7, §3.9; pass 7: any level (the house or a greybox level); pass 8: no stream dashes, the game's cutaway
  *
- *   const W = buildWorld(world, LEVEL, { hullMat, seed }) → { scene, rooms, extras, kits, textures, mats, hullMat, tick(t, t12, stepped), cull(camZ), stats }
+ *   const W = buildWorld(world, LEVEL, { hullMat, seed, vivid, decor }) → { scene, rooms, extras, kits, textures, mats, hullMat, tick(t, t12, stepped), cull(camZ), stats }
  * The kit's buildScene gets each scene without the kinds it does not know (and without the house's pool, which the game draws); nothing in kit/ changes.
  */
 import { THREE, HullMaterial, skyDome, inkAll, mulberry32, rng } from '../kit/comic3d.js';
 import { buildScene, makeTextures, makeMats } from '../kit/interior.js';
 import { PIECE } from '../kit/parts.js';
 import { EXTRA, KIT_DYNAMIC } from './pieces.js';
+import { HOUSE, DERIVED } from '../kit/house-spec.js';
+import { HOUSE_PALETTE } from '../kit/interior.js';
+import { VIVID_MATS, fillPalette } from '../level/palette.js';
+
+/* ── design pass 9: THE VIVID SET. The kit's palette objects are refilled before any scene is built (the kit's buildScene reads HOUSE_PALETTE),
+ *  and the kit's materials take the game's shading knobs (level/palette.js VIVID_MATS): the rooms are seen from inside, where the style book's
+ *  shadow band turned every wall on the shadow side and every ceiling brown. ── */
+export function fillVivid() { return fillPalette(HOUSE, DERIVED, HOUSE_PALETTE); }
+const tuned = new WeakSet();
+function vivid(m, role) {
+  if (!m || !m.uniforms || !m.uniforms.uKeyMix || tuned.has(m)) return m; tuned.add(m); const u = m.uniforms, V = VIVID_MATS, o = V[role] || V.furn;
+  u.uKeyMix.value *= V.keyWash; if (o.shadowMul != null) u.uShadowMul.value = o.shadowMul; if (o.shadowMix != null) u.uShadowMix.value = o.shadowMix; if (o.bias != null) u.uBias.value = o.bias;
+  u.uFillAmt.value = Math.min(1, u.uFillAmt.value * V.fill); return m;
+}
+/** tuneMats(M): the kit's material table with the vivid knobs on every material it has made or will make (the factories are wrapped, the cache stands) */
+export function tuneMats(M) {
+  { const f = M.arch.bind(M); M.arch = key => vivid(f(key), 'wall'); }
+  for (const k of ['furn', 'wicker', 'shaker', 'drawer', 'doorPanels']) { const f = M[k].bind(M); M[k] = (key, extra) => vivid(f(key, extra), 'furn'); }
+  vivid(M.ceiling, 'ceiling'); for (const k of ['oak', 'paver', 'rubber', 'lawn', 'mulch']) vivid(M[k], 'floor');
+  for (const k of ['terrazzo', 'steel', 'blackGlass', 'cushion', 'rubberObj', 'oakWood', 'hedge', 'oakLeaf', 'palm', 'bark', 'fence', 'stone', 'coir', 'rug', 'runner', 'mirror', 'wrong']) vivid(M[k], 'furn');
+  return M;
+}
 
 /** a stream's dashes as ONE instanced mesh (the kit's windDashes draws a mesh per dash; ten streams cost the phone two hundred draw calls).
  *  The kit's numbers: 12–40 dashes scrolling along the box's direction on twos, steam dashes shorter and greyer. */
@@ -25,8 +47,8 @@ function instancedWind(K, w, r, id) {
 }
 
 /** the scene as the kit can build it: the kinds it knows, the house's pool left out (the game draws it) */
-function kitScene(sc) {
-  return Object.assign({}, sc, { props: sc.props.filter(p => PIECE[p.kind] && !p.picture), floors: sc.floors.filter(f => f.id !== 'pool') });
+function kitScene(sc, decor = true) {
+  return Object.assign({}, sc, { props: sc.props.filter(p => PIECE[p.kind] && !p.picture && (decor || !p.decor)), floors: sc.floors.filter(f => f.id !== 'pool') });
 }
 /* ── the static merge: every mesh that never moves and is not tied to a wall or a ceiling, merged with the others of its material ── */
 const matIds = new WeakMap(); let matN = 0;
@@ -85,16 +107,17 @@ export function buildWorld(world, LEVEL, o = {}) {
   const scene = new THREE.Scene();
   const skyLook = LEVEL.skyLook || (LEVEL.scenes.find(s => s.key === 'backyard') || LEVEL.scenes[LEVEL.scenes.length - 1]).look;
   scene.add(skyDome(world, { bands: skyLook.sky, edges: skyLook.skyEdges, bandW: 0.03 }));
-  const textures = makeTextures(), mats = makeMats(world, textures), hullMat = o.hullMat || new HullMaterial({ world });
+  const textures = makeTextures(), mats = o.vivid === false ? makeMats(world, textures) : tuneMats(makeMats(world, textures)), hullMat = o.hullMat || new HullMaterial({ world });   // pass 9: the vivid shading unless ?vivid=0
   const rooms = {}, extras = {}, kits = {}, dyn = []; const stats = { merged: {}, meshes: 0 };
   for (const sc of LEVEL.scenes) {
     const r = mulberry32((o.seed ?? 7) * 101 + sc.n + 40);
-    const g = buildScene(world, kitScene(sc), { hullMat, textures, mats, seed: o.seed, sky: false });
+    const g = buildScene(world, kitScene(sc, o.decor !== false), { hullMat, textures, mats, seed: o.seed, sky: false });
     g.position.z = LEVEL.place[sc.key]; rooms[sc.key] = g; scene.add(g); const K = g.userData.kit; kits[sc.key] = K;
     g.userData.walls.forEach((w, i) => { const wl = sc.walls[i]; w.userData.behindHand = !!wl && Math.min(wl.a[1], wl.b[1]) + LEVEL.place[sc.key] > LEVEL.launch.z + 0.02; });   // pass 8: a wall wholly behind the hand is never drawn (the aim camera stands outside the front door; at the right stance it looked into the door wall's stucco)
     const props = g.children.find(c => c.name === 'props');
     const place = (piece, x, y, z, ry = 0) => { piece.position.set(x, y, z); piece.rotation.y = ry; inkAll(piece, hullMat, 500 + sc.n * 50 + props.children.length); props.add(piece); dyn.push(piece); return piece; };
     for (const p of sc.props) {
+      if (p.decor && o.decor === false) continue;                                                                   // pass 9: ?decor=0 builds the bare walls
       if (p.kind === 'smoke') { extras[p.id] = place(EXTRA.ovenSmoke(K, p, r), p.x, p.y, p.z); continue; }   // the house's oven smoke follows its own curve
       const make = EXTRA[p.kind]; if (!make) continue;
       extras[p.id] = place(make(K, p, r), p.x, p.y ?? 0, p.z, p.ry || 0);

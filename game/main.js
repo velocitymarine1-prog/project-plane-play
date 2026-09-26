@@ -6,7 +6,7 @@
  * NEXT) → START LINE. PAUSE and the LEVEL SELECT are overlays; choosing a level writes the save's `current` and reloads (a boot).
  * Query flags: ?shot=1&t=N (a proof frame: fixed steps, then the title SHOT-READY) · ?launch=x,yaw,loft,v (throw a line on load) ·
  * ?card=A,P&cash=N (a card for proofs; not saved) · ?level=id (play any level in memory; not saved) · ?screen=aim|pay|finish|pause|levels|title
- * (stage a screen) · ?tempo=1 · ?dpr= · ?merge=0 · ?hud=0 · ?seed= · ?x= (the stance, for frames)
+ * (stage a screen) · ?tempo=1 · ?dpr= · ?merge=0 · ?hud=0 · ?seed= · ?x= (the stance, for frames) · ?vivid=0 · ?decor=0 (pass 9's colours and decor off, for a comparison)
  * Pass 8 (QUALITY OF LIFE): the drone is held under the ceiling, no stream dashes, no ghost of the last throw, the tempo 0.6 from the level.
  */
 import { THREE, ComicWorld, ComicMaterial, HullMaterial, ComicEngine, SteppedClock, mountHUD, TWOS_LABELS, parseQuery, installErrorTitle, inkAll, col, mix } from '../kit/comic3d.js';
@@ -17,7 +17,8 @@ import { stage, simulate, progressOf, toastAt, bonkLetters, endLetters } from '.
 import { attach as attachGesture } from './gesture.js';
 import { load, save, slot, resetLevel, resetAll, status as saveStatus } from './save.js';
 import { settle, cards, buy, cardNow, PLANE } from './economy.js';
-import { buildWorld } from './world.js';
+import { buildWorld, fillVivid } from './world.js';
+import { vividLooks } from '../level/palette.js';
 import { EXTRA } from './pieces.js';
 import { applyPrint } from './prints.js';
 import { mountGameHUD } from './hud.js';
@@ -25,6 +26,8 @@ import { mountGameHUD } from './hud.js';
 /* ───────────── the page's flags, the save, the level ───────────── */
 const Q = parseQuery(), QS = new URLSearchParams(location.search);
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches, coarse = matchMedia('(pointer: coarse)').matches;
+const VIVID = QS.get('vivid') !== '0', DECOR = QS.get('decor') !== '0';   // pass 9: the vivid set and the wall decor, each off for a comparison frame
+if (VIVID) fillVivid();                                                    // before the HUD reads the palette and before any level or scene is built
 const SAVE = load();
 const PEEK = QS.get('level') || null;                                       // a level played in memory, for proofs and a look ahead
 let levelId = PEEK || SAVE.current || 'house', levelNote = '';
@@ -38,6 +41,7 @@ const INFO = byId(levelId), NEXT = nextOf(levelId);
 const P = slot(SAVE, levelId);                                              // the level's slot; P.allowance reaches the save's root
 const TEMPO = QS.has('tempo') ? Math.max(0.2, +QS.get('tempo') || 1) : LEVEL.tempo;
 const NOSAVE = QS.has('card') || QS.has('cash') || Q.shot || !!PEEK;
+if (VIVID) vividLooks(LEVEL.scenes);                                       // pass 9: the scenes' shadow tints
 const G = LEVEL.gauge, ST = stage(LEVEL), look0 = LEVEL.scenes[0].look;
 const firstEntry = P.runs === 0;
 
@@ -56,7 +60,7 @@ try { await Promise.race([Promise.all([document.fonts.load('100px Bangers'), doc
 
 const camera = new THREE.PerspectiveCamera(LEVEL.cameras.aim.fov, 1, 0.05, 900);
 const hullMat = new HullMaterial({ world }), hullNoFog = new HullMaterial({ world, fog: false });
-const W = buildWorld(world, LEVEL, { hullMat, seed: Q.seed, noMerge: QS.get('merge') === '0', streams: false });   // pass 8: the streams' dashes were clutter; their physics stays
+const W = buildWorld(world, LEVEL, { hullMat, seed: Q.seed, noMerge: QS.get('merge') === '0', streams: false, vivid: VIVID, decor: DECOR });   // pass 8: the streams' dashes were clutter; their physics stays; pass 9: the vivid shading and the decor
 const scene = W.scene;
 const plane = buildPaperPlane(world, { hullMat: hullNoFog.withMul(0.45), seed: 21 }); plane.scale.setScalar(LEVEL.plane.scale); scene.add(plane);
 const K0 = W.kits[LEVEL.scenes[0].key], KK = (LEVEL.toast && W.kits[LEVEL.toast.scene]) || K0;
