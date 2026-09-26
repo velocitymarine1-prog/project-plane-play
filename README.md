@@ -8,4 +8,4 @@ Play: https://velocitymarine1-prog.github.io/project-plane-play/
 
 This repository holds only the browser files of the build (the kit vendored from the COMIC 3D house style, the level, the game). The design
 passes, the solvers and the source of truth live in the private `project-plane` repository; this copy is written by its `tools/deploy.sh`
-from commit `c7bff7e`.
+from commit `76f7880`.

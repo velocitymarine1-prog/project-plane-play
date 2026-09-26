@@ -4,7 +4,7 @@
  * THE PLANE: the glide ratio 5.0 + 0.4 a level, the damping stepped at 5 / 10 / 15, the trim never moves (7 m/s); the print evolves
  *            at 1 / 5 / 10 / 15 / 20 (the silhouette never changes).
  * ALLOWANCE: the pay multiplier, ×1.0 + 0.1 a level, no cap.
- * Prices: pass 1's ladders × 3.5 (pass 8: × 1.5 again), ×1.32 a level (ALLOWANCE ×1.4), flattening to ×1.15 after the tenth card.
+ * Prices: pass 1's ladders × 3.5 (pass 8: × 1.4 again), ×1.32 a level (ALLOWANCE ×1.4), flattening to ×1.15 after the tenth card.
  * Pay: $10 a throw + $1 a metre reached (the high-water mark), × the allowance; the milestones paid once per save; the finish $150 once.
  */
 export const ARM = { base: 5.5, step: 0.5, max: 8,
@@ -18,7 +18,7 @@ export const PLANE = { trim: 7.0,
   print: (L, paper = PLANE.prints) => { let p = paper[0]; for (const q of paper) if (L >= q[0]) p = q; return p; },
   nextPrint: (L, paper = PLANE.prints) => paper.find(q => q[0] > L) || null };
 export const ALLOWANCE = { mult: L => 1 + 0.1 * (L - 1) };
-export const PRICES = { arm: 158, plane: 185, allowance: 132, ratio: 1.32, allowanceRatio: 1.4, flattenAfter: 10, flatRatio: 1.15 };   // pass 8: ×1.5 of pass 3's 105 / 123 / 88, so the roomier house keeps pass 3's pacing (docs/design/08-quality.md §3.7)
+export const PRICES = { arm: 147, plane: 172, allowance: 123, ratio: 1.32, allowanceRatio: 1.4, flattenAfter: 10, flatRatio: 1.15 };   // pass 8: ×1.4 of pass 3's 105 / 123 / 88, so the roomier house (the ceilings at 3.7 m) keeps pass 3's pacing (docs/design/08-quality.md §8.2)
 /** the price of the NEXT level of a card, given the level held now (L → L + 1); mul = the level's price factor (pass 5: ×1.4 a level) */
 export function priceOf(card, L, mul = 1) {
   const base = PRICES[card], r = card === 'allowance' ? PRICES.allowanceRatio : PRICES.ratio;
