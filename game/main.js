@@ -1,29 +1,44 @@
-/* game/main.js — PROJECT PLANE, level 1: THE HOUSE IN ONE · the page: the loop, the throw, the flight's playback, the pay, the cards,
- * the cameras, the lettering, pause, the proofs · design pass 4 (25 September 2026), built from design passes 1–3
+/* game/main.js — PROJECT PLANE · the page: the loop, the throw, the flight's playback, the pay, the cards, the cameras, the lettering, pause,
+ * the proofs · design pass 4 (25 September 2026), built from design passes 1–3; pass 6 the clean page; pass 7 the six levels.
  *
- * States: BOOT → START LINE (the aim view, the cards) → AIM (the drag) → FLIGHT (the precomputed path played at the tempo) → END (the
- * lettering, the pay panel) → START LINE, or FINISH (THE HOUSE IN ONE!) → START LINE. PAUSE is an overlay.
+ * States: BOOT (the save, the level by id, its world) → TITLE CARD (a level's first entry) → START LINE (the aim view, the cards) → AIM (the
+ * drag) → FLIGHT (the precomputed path played at the tempo) → END (the lettering, the pay panel) → START LINE, or FINISH (THE … IN ONE!,
+ * NEXT) → START LINE. PAUSE and the LEVEL SELECT are overlays; choosing a level writes the save's `current` and reloads (a boot).
  * Query flags: ?shot=1&t=N (a proof frame: fixed steps, then the title SHOT-READY) · ?launch=x,yaw,loft,v (throw a line on load) ·
- * ?card=A,P&cash=N (a card for proofs; not saved) · ?screen=aim|pay|finish|pause (stage a screen) · ?tempo=1 · ?dpr= · ?merge=0 · ?hud=0 · ?seed=
+ * ?card=A,P&cash=N (a card for proofs; not saved) · ?level=id (play any level in memory; not saved) · ?screen=aim|pay|finish|pause|levels|title
+ * (stage a screen) · ?tempo=1 · ?dpr= · ?merge=0 · ?hud=0 · ?seed=
  */
 import { THREE, ComicWorld, ComicMaterial, HullMaterial, ComicEngine, SteppedClock, mountHUD, TWOS_LABELS, parseQuery, installErrorTitle, inkAll, col, mix } from '../kit/comic3d.js';
 import { buildPaperPlane } from '../kit/paper-plane.js';
-import { LEVEL, HOUSE } from '../level/house.js';
+import { HOUSE } from '../level/house.js';
+import { LEVELS, byId, nextOf, unlocked, fileOf } from '../level/index.js';
 import { stage, simulate, progressOf, toastAt, bonkLetters, endLetters } from './glide.js';
-import { attach as attachGesture, readPull } from './gesture.js';
-import { load, save, reset, status as saveStatus } from './save.js';
+import { attach as attachGesture } from './gesture.js';
+import { load, save, slot, resetLevel, resetAll, status as saveStatus } from './save.js';
 import { settle, cards, buy, cardNow, PLANE } from './economy.js';
 import { buildWorld } from './world.js';
 import { EXTRA } from './pieces.js';
 import { applyPrint } from './prints.js';
 import { mountGameHUD } from './hud.js';
 
-/* ───────────── the page's flags ───────────── */
+/* ───────────── the page's flags, the save, the level ───────────── */
 const Q = parseQuery(), QS = new URLSearchParams(location.search);
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches, coarse = matchMedia('(pointer: coarse)').matches;
+const SAVE = load();
+const PEEK = QS.get('level') || null;                                       // a level played in memory, for proofs and a look ahead
+let levelId = PEEK || SAVE.current || 'house', levelNote = '';
+if (!byId(levelId)) { levelNote = `There is no level "${levelId}"; the house it is.`; levelId = 'house'; }
+if (!PEEK && !unlocked(levelId, SAVE)) { levelNote = `${byId(levelId).title} is not open yet; the house it is.`; levelId = 'house'; }
+let LEVEL;
+try { LEVEL = (await import(fileOf(levelId))).LEVEL; }
+catch (e) { console.error(e); levelNote = `${byId(levelId).title} did not load (${e.message}); the house it is.`; levelId = 'house'; LEVEL = (await import(fileOf('house'))).LEVEL; }
+if (!PEEK && SAVE.current !== levelId) SAVE.current = levelId;
+const INFO = byId(levelId), NEXT = nextOf(levelId);
+const P = slot(SAVE, levelId);                                              // the level's slot; P.allowance reaches the save's root
 const TEMPO = QS.has('tempo') ? Math.max(0.2, +QS.get('tempo') || 1) : LEVEL.tempo;
-const NOSAVE = QS.has('card') || QS.has('cash') || Q.shot;
-const G = LEVEL.gauge, ST = stage(), look0 = LEVEL.scenes[0].look;
+const NOSAVE = QS.has('card') || QS.has('cash') || Q.shot || !!PEEK;
+const G = LEVEL.gauge, ST = stage(LEVEL), look0 = LEVEL.scenes[0].look;
+const firstEntry = P.runs === 0;
 
 /* ───────────── the world, the engine, the lettering ───────────── */
 const world = new ComicWorld(Object.assign({ name: 'plane' }, look0));
@@ -40,14 +55,15 @@ try { await Promise.race([Promise.all([document.fonts.load('100px Bangers'), doc
 
 const camera = new THREE.PerspectiveCamera(LEVEL.cameras.aim.fov, 1, 0.05, 900);
 const hullMat = new HullMaterial({ world }), hullNoFog = new HullMaterial({ world, fog: false });
-const W = buildWorld(world, { hullMat, seed: Q.seed, noMerge: QS.get('merge') === '0' });
+const W = buildWorld(world, LEVEL, { hullMat, seed: Q.seed, noMerge: QS.get('merge') === '0' });
 const scene = W.scene;
 const plane = buildPaperPlane(world, { hullMat: hullNoFog.withMul(0.45), seed: 21 }); plane.scale.setScalar(LEVEL.plane.scale); scene.add(plane);
-const K0 = W.kits.foyer, KK = W.kits.kitchen;
+const K0 = W.kits[LEVEL.scenes[0].key], KK = (LEVEL.toast && W.kits[LEVEL.toast.scene]) || K0;
 const hand = EXTRA.hand(K0); inkAll(hand, hullNoFog.withMul(0.7), 61); scene.add(hand);
 const fan = EXTRA.loftFan(K0, G.lofts); scene.add(fan);
 const marks = EXTRA.bonkMarks(K0); inkAll(marks, hullMat, 62); scene.add(marks);
-const slices = [0, 1].map(i => { const t = EXTRA.toast(KK); inkAll(t, hullMat, 63 + i); t.visible = false; scene.add(t); return t; });
+const TOASTER = () => (LEVEL.toast && W.extras[LEVEL.toast.id]) || null;   // the toaster class's piece: THE TOASTER, or a level's popper
+const slices = [0, 1].map(i => { const t = LEVEL.id === 'house' ? EXTRA.toast(KK) : EXTRA.slice(KK, LEVEL.toast ? LEVEL.toast.color : 'stock'); inkAll(t, hullMat, 63 + i); t.visible = false; scene.add(t); return t; });
 const crumbs = EXTRA.puffBurst(K0, { color: mix(HOUSE.yellow, HOUSE.ink, 0.35), n: 9, r: 0.022, gravity: 4, life: 0.6, seed: 31 }); scene.add(crumbs);
 const drips = EXTRA.puffBurst(K0, { color: mix(HOUSE.cyan, HOUSE.stock, 0.4), n: 12, r: 0.028, gravity: 6, life: 0.55, seed: 32 }); scene.add(drips);
 const soot = EXTRA.puffBurst(K0, { n: 18, r: 0.026, gravity: -0.5, life: 0.8, grow: 1.2, seed: 33, soot: true }); scene.add(soot);
@@ -56,8 +72,10 @@ let pennant = null;
 function placePennant(best) {
   if (!best) { if (pennant) pennant.visible = false; return; } const text = best.d.toFixed(1) + ' m';
   if (!pennant) { pennant = EXTRA.pennant(K0, text); inkAll(pennant, hullMat, 66); scene.add(pennant); fxPieces.push(pennant); } else pennant.userData.setText(text);
-  pennant.visible = true; pennant.position.set(Math.max(-3, Math.min(3, best.x)), 0, Math.max(LEVEL.finish.z, Math.min(LEVEL.launch.z - 0.3, best.z)));
+  pennant.visible = true; pennant.position.set(Math.max(-3, Math.min(3, best.x)), floorAt(best.x, best.z), Math.max(LEVEL.finish.z, Math.min(LEVEL.launch.z - 0.3, best.z)));
 }
+/** the floor under a point (the mall's balcony is a storey up): the highest solid floor whose footprint holds it, else the ground */
+function floorAt(x, z) { let y = 0; for (const c of ST.colliders) if (c.type === 'floor' && x > c.x0 && x < c.x1 && z > c.z0 && z < c.z1 && c.y > y) y = c.y; return y; }
 /* the ghost of the last throw and the preview of the next, as instanced ink dashes */
 const dashGeo = new THREE.BoxGeometry(0.014, 0.014, 0.11);
 function dashLine(color, n) { const im = new THREE.InstancedMesh(dashGeo, new ComicMaterial({ world, unlit: true, color, inkWeight: 0, fog: false }), n); im.count = 0; im.userData.noInk = true; im.frustumCulled = false; scene.add(im); return im; }
@@ -76,17 +94,17 @@ function applyLook(L) {
 }
 
 /* ───────────── the player and the state ───────────── */
-const P = load();
 if (QS.has('card')) { const [a, p] = QS.get('card').split(',').map(Number); P.arm = Math.max(1, a || 1); P.plane = Math.max(1, p || 1); }
 if (QS.has('cash')) P.cash = Math.max(0, +QS.get('cash') || 0);
-let twos = Q.twos == null ? (P.twos ?? 1) : Q.twos; engine.twos = twos; kitHud.setTwos(TWOS_LABELS[twos]);
-let hidden = !Q.hud, flash = 0, paused = false, handT = -9, squashT = -9, slicesLanded = [false, false];
+let twos = Q.twos == null ? (SAVE.twos ?? 1) : Q.twos; engine.twos = twos; kitHud.setTwos(TWOS_LABELS[twos]);
+let hidden = !Q.hud, flash = 0, paused = false, handT = -9, squashT = -9, slicesLanded = [false, false], titleT = -1;
 const DEBUG = QS.get('debug') === '1';
 const S = { mode: 'boot', x: 0.2, yaw: 0, loftI: 2, speed: 5.5, locked: false, pullBack: 0, dragging: false, run: null, tp: 0, fired: 0, reached: 0, crossed: 0, endT: 0, endPhase: 0, endInfo: null, pay: null,
   fwd: new THREE.Vector3(0, 0, -1), bank: 0, sBank: 0, tumble: 0, throws: P.runs, lastThrow: null, sootUntil: -1, dripsUntil: -1 };
 const stats = { avgMs: 0 };
-applyPrint(plane, PLANE.print(P.plane)[2]); placePennant(P.best); hud.cash(P.cash);
-if (saveStatus.note) { const n = document.getElementById('storageNote'); n.textContent = saveStatus.note; n.hidden = false; }
+applyPrint(plane, PLANE.print(P.plane, LEVEL.paper)[2]); placePennant(P.best); hud.cash(P.cash); hud.best(P.best, LEVEL);
+{ const notes = [saveStatus.note, levelNote].filter(Boolean); if (notes.length) { const n = document.getElementById('storageNote'); n.textContent = notes.join(' '); n.hidden = false; } }
+document.getElementById('pauseInfo').textContent = `PROJECT PLANE · level ${INFO.n} · ${LEVEL.finishLine}${PEEK ? ' · A LOOK AHEAD: NOTHING IS SAVED' : ''} · keys: ← → yaw · ↑ ↓ power · Q E step · 1–5 loft · space throws · R retries · T twos · H hides · P pauses`;
 
 /* ───────────── the plane on the hand, the gauge, the readout ───────────── */
 const handPoint = () => new THREE.Vector3(S.x, LEVEL.launch.y, LEVEL.launch.z);
@@ -112,73 +130,96 @@ function throwPlane(L) {
   hud.showCards(false); hud.hint(false); hud.panel(null); S.speed = G.min + (card.cap - G.min) * L.power; refreshReadout(); hud.metres(0);
   const p = planeScreen(); sfx('THWIP!', p.x - 30, p.y - 80, 3);
   hand.userData.set(1); handT = clock.t; fan.visible = false; preview.count = 0; preview.instanceMatrix.needsUpdate = true;
-  for (const s of slices) s.visible = false; slicesLanded = [false, false]; if (W.extras.toaster) W.extras.toaster.userData.arm(false);
+  for (const s of slices) s.visible = false; slicesLanded = [false, false]; { const T = TOASTER(); if (T && T.userData.arm) T.userData.arm(false); }
   S.fwd.copy(aimDir(L.yaw, L.loft)); drone.init = false; marks.visible = false;
 }
+const pieceOf = id => W.extras[String(id).split('/').pop()] || null;
 function fireEvent(e) {
   const p = planeScreen(); const at = (text, step, dy = -80) => sfx(text, p.x + 30, p.y + dy, step);
   switch (e.kind) {
     case 'wind': at(e.wind === 'lift' ? 'PSSST' : e.wind === 'smoke' ? 'FWOOSH' : 'WHOOSH', 3); if (e.wind === 'smoke') S.sootUntil = e.t + 2; break;
-    case 'pop': { const T = W.extras.toaster; if (T) T.userData.pop(clock.t12); const sp = toScreen(new THREE.Vector3(LEVEL.toast.x, LEVEL.toast.y + 0.25, LEVEL.toast.z)); sfx('TING!', sp.x - 20, sp.y - 20, 1); if (!Q.shot) setTimeout(() => sfx('POP!', sp.x + 16, sp.y - 70, 3), 130); break; }
-    case 'crumb': at('CRUMB!', 2); crumbs.userData.burst(plane.position.clone(), clock.t12, 5, 0.6); break;
-    case 'scrape': at(e.kind2 === 'hedge' ? 'RUSTLE' : e.kind2 === 'screenCage' ? 'FLOP' : 'SCRAPE!', 2); break;
+    case 'pop': { const T = TOASTER(); if (T && T.userData.pop) T.userData.pop(clock.t12); const TO = LEVEL.toast, LT = (TO && TO.letters) || {}; const sp = toScreen(new THREE.Vector3(TO.x, TO.y + 0.25, TO.z));
+      if (LT.ting) sfx(LT.ting, sp.x - 20, sp.y - 20, 1); if (!Q.shot) setTimeout(() => sfx(LT.pop || 'POP!', sp.x + 16, sp.y - 70, 3), LT.ting ? 130 : 0); else if (!LT.ting) sfx(LT.pop || 'POP!', sp.x + 16, sp.y - 70, 3); break; }
+    case 'crumb': at(e.letters || 'CRUMB!', 2); crumbs.userData.burst(plane.position.clone(), clock.t12, 5, 0.6); break;
+    case 'scrape': at(e.kind2 === 'hedge' ? 'RUSTLE' : e.kind2 === 'screenCage' ? 'FLOP' : e.kind2 === 'rim' ? 'CLANG' : 'SCRAPE!', 2); break;
     case 'soggy': at('SOGGY!', 2); drips.userData.burst(plane.position.clone(), clock.t12, 6, 0.8); S.dripsUntil = e.t + 2; break;
-    case 'bonk': { const { text, step } = bonkLetters(e.sn); at(text, step); const n = new THREE.Vector3(...e.n); marks.userData.show(new THREE.Vector3(e.x, e.y, e.z).addScaledVector(n, -0.08), n, e.ceiling, clock.t12); drone.kick.addScaledVector(n, 0.12); if (step >= 5) S.tumble = 3; squashT = clock.t12; break; }
-    case 'boing': at('BOING!', 3); if (W.extras.trampoline) W.extras.trampoline.userData.boing(clock.t12); break;
+    case 'effect': at(e.letters || 'SOGGY!', 2); drips.userData.burst(plane.position.clone(), clock.t12, 4, 0.6); break;
+    case 'bonk': { const { text, step } = bonkLetters(e.sn, LEVEL); at(text, step); const n = new THREE.Vector3(...e.n); marks.userData.show(new THREE.Vector3(e.x, e.y, e.z).addScaledVector(n, -0.08), n, e.ceiling, clock.t12); drone.kick.addScaledVector(n, 0.12); if (step >= 5) S.tumble = 3; squashT = clock.t12; break; }
+    case 'boing': { at('BOING!', 3); const piece = pieceOf(e.id); if (piece && piece.userData.boing) piece.userData.boing(clock.t12); break; }
+    case 'carry': at(e.letters || 'SLIDE…', 2); break;
+    case 'ring': at(e.letters || 'SWISH!', 4); flash = 0.2; break;
   }
 }
 function cutTo(i) {
-  const cp = LEVEL.checkpoints[i]; const next = LEVEL.scenes.find(s => s.key === (cp.key === 'pond' ? 'backyard' : LEVEL.scenes[LEVEL.scenes.findIndex(s2 => s2.key === cp.key) + 1].key));
+  const cp = LEVEL.checkpoints[i]; const next = LEVEL.scenes.find(s => s.key === cp.next) || LEVEL.scenes[LEVEL.scenes.findIndex(s => s.key === cp.key) + 1];
   if (next && next.look) applyLook(next.look); const p = planeScreen(); sfx(cp.letter, p.x + 40, p.y - 130, 4);
-  if (i === 0 && W.extras.toaster) W.extras.toaster.userData.arm(true);   // the toaster hears you coming: its slots glow after the hall
+  if (i === 0) { const T = TOASTER(); if (T && T.userData.arm) T.userData.arm(true); }   // the toaster class hears you coming: it arms after the hall
 }
 function endFlight() {
-  const r = S.run, { msg, what } = endLetters(r); const p = planeScreen(); sfx(msg, p.x + 40, p.y - 70, r.result === 'gate' ? 5 : r.result === 'crumple' ? 4 : 3);
+  const r = S.run, { msg, what } = endLetters(r, LEVEL); const p = planeScreen(); sfx(msg, p.x + 40, p.y - 70, r.result === 'gate' ? 5 : r.result === 'crumple' ? 4 : 3);
   if (r.result === 'gate') flash = 0.35; drawDashes(ghost, r.path, 5); S.mode = 'end'; S.endT = 0; S.endPhase = 0; S.endInfo = { msg, what };
 }
 function payOut() {
   const r = S.run, d = r.result === 'gate' ? LEVEL.length : progressOf(ST, r.path), fin = r.result === 'gate', last = r.path[r.path.length - 1];
-  const pay = settle(P, d, fin, last); if (!NOSAVE) save(P); hud.cash(P.cash); S.pay = pay;
+  const pay = settle(P, d, fin, last, LEVEL); if (!NOSAVE) save(SAVE); hud.cash(P.cash); S.pay = pay;
   const lines = [`<b>${d.toFixed(1)} m · ${S.endInfo.msg}</b>`, `<span class="line">+$${pay.perThrow} for the throw · +$${pay.metres} for the metres${pay.mult > 1 ? ` · ×${pay.mult.toFixed(1)}` : ''}</span>`];
   for (const f of pay.firsts) lines.push(`<span class="line first">${f.text}</span>`);
-  if (pay.finishBonus) lines.push(`<span class="line first">THE HOUSE IN ONE: +$${pay.finishBonus}</span>`);
+  if (pay.finishBonus) lines.push(`<span class="line first">${LEVEL.finishLine.replace(/!$/, '')}: +$${pay.finishBonus}</span>`);
   if (pay.record && d > 0) { lines.push(`<span class="line rec">NEW RECORD!</span>`); placePennant(P.best); if (pennant) pennant.userData.hop(clock.t12); const p = planeScreen(); sfx('NEW RECORD!', p.x, p.y - 150, 3); }
-  hud.panel(lines.join('')); hud.best(P.best);
+  hud.panel(lines.join('')); hud.best(P.best, LEVEL);
 }
 function startLine() {
-  hud.panel(null); S.mode = 'start'; S.pullBack = 0; S.locked = false; S.dragging = false; fan.visible = true; hand.visible = true; hand.userData.set(0);
-  applyLook(look0); hud.best(P.best);
-  hud.cards(cards(P), onBuy); hud.showCards(true); hud.hint((P.runs === 0 && !Q.shot) || QS.get('hint') === '1'); drone.init = false; refreshGauge(); refreshReadout(); previewDots();
+  hud.panel(null); hud.title(INFO, LEVEL, false); S.mode = 'start'; S.pullBack = 0; S.locked = false; S.dragging = false; fan.visible = true; hand.visible = true; hand.userData.set(0);
+  applyLook(look0); hud.best(P.best, LEVEL);
+  hud.cards(cards(P, LEVEL), onBuy); hud.showCards(true); hud.hint((P.runs === 0 && !Q.shot) || QS.get('hint') === '1'); drone.init = false; refreshGauge(); refreshReadout(); previewDots();
 }
+/** the title card of a level (its first entry): a tap or 1.8 s takes it to the start line */
+function titleCard() { S.mode = 'title'; hud.title(INFO, LEVEL, true); titleT = clock.t; applyLook(look0); hand.visible = true; fan.visible = false; hud.showCards(false); hud.hint(false); drone.init = false; }
+document.getElementById('title').addEventListener('pointerdown', e => { if (S.mode === 'title') { startLine(); e.preventDefault(); } });
 function finishCard() {
-  hud.panel(`<b>THE HOUSE IN ONE!</b><span class="line">throw ${P.runs} · ${LEVEL.length} m in one throw${P.firstFinishRun && P.firstFinishRun < P.runs ? ` · first on throw ${P.firstFinishRun}` : ''}</span>${S.pay && S.pay.finishBonus ? `<span class="line first">+$${S.pay.finishBonus}</span>` : ''}<span class="tap">TAP TO KEEP THROWING</span>`);
-  S.mode = 'finish';
+  const next = NEXT ? `<button type="button" class="next" id="nextBtn">NEXT: ${NEXT.title}</button>` : `<span class="line">THE END OF THE BOOK, FOR NOW</span>`;
+  hud.panel(`<b>${LEVEL.finishLine}</b><span class="line">throw ${P.runs} · ${LEVEL.length} m in one throw${P.firstFinishRun && P.firstFinishRun < P.runs ? ` · first on throw ${P.firstFinishRun}` : ''}</span>${S.pay && S.pay.finishBonus ? `<span class="line first">+$${S.pay.finishBonus}</span>` : ''}${next}<span class="tap">TAP TO KEEP THROWING</span>`);
+  S.mode = 'finish'; const nb = document.getElementById('nextBtn'); if (nb) nb.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); openLevels(NEXT.id); });
 }
 function onBuy(key) {
-  const b = buy(P, key); if (!b) return; if (!NOSAVE) save(P); hud.cash(P.cash); hud.cards(cards(P), onBuy); refreshGauge(); previewDots();
-  if (b.printChanged) applyPrint(plane, PLANE.print(P.plane)[2]);
+  const b = buy(P, key, LEVEL); if (!b) return; if (!NOSAVE) save(SAVE); hud.cash(P.cash); hud.cards(cards(P, LEVEL), onBuy); refreshGauge(); previewDots();
+  if (b.printChanged) applyPrint(plane, PLANE.print(P.plane, LEVEL.paper)[2]);
   const el = hud.els.cards.querySelector(`[data-key="${key}"]`); const r = el ? el.getBoundingClientRect() : { left: innerWidth / 2, top: innerHeight / 2, width: 0 }; sfx(key === 'arm' ? 'STRONGER!' : key === 'plane' ? 'SLEEKER!' : 'RICHER!', r.left + r.width / 2, r.top - 30, 2);
 }
 
+/* ───────────── the level select (pass 7): six cards; a pick writes the save's `current` and boots the page ───────────── */
+let levelsOpen = false;
+function openLevels(focusId) { levelsOpen = true; hud.levels(LEVELS, SAVE, levelId, focusId || levelId, pickLevel); hud.showLevels(true); }
+function closeLevels() { levelsOpen = false; hud.showLevels(false); }
+function pickLevel(id) {
+  if (id === levelId && !PEEK) { closeLevels(); return; } if (!unlocked(id, SAVE)) return;
+  SAVE.current = id; const saved = !NOSAVE && save(SAVE);
+  location.href = location.pathname + (saved ? '' : '?level=' + encodeURIComponent(id));   // a clean boot into the level (with storage blocked, the flag carries it)
+}
+document.getElementById('levelsClose').addEventListener('click', closeLevels);
+document.getElementById('levelsBtn').addEventListener('click', () => { closePause(); openLevels(); });
+
 /* ───────────── input: the gesture, the keyboard, the buttons ───────────── */
 const gesture = attachGesture(canvas, G, {
-  cap, canStart: e => (S.mode === 'start') && e.target === canvas && e.clientY > innerHeight * 0.28 && !paused,
+  cap, canStart: e => (S.mode === 'start') && e.target === canvas && e.clientY > innerHeight * 0.28 && !paused && !levelsOpen,
   onStart() { S.mode = 'aim'; S.dragging = true; hud.showCards(false); hud.hint(false); S.pullBack = 0; },
   onMove(live) { S.speed = live.speed; S.locked = live.locked; S.yaw = live.yaw; S.pullBack = Math.min(live.back / live.pull.full, (cap() - G.min) / (G.max - G.min)); if (live.rising) S.loftI = live.loftIndex; previewDots(); },
   onEnd(d) { S.dragging = false; S.lastDecision = d; if (S.mode !== 'aim') return;
     if (d.action === 'throw') { S.yaw = d.yaw; S.loftI = d.loftIndex; S.speed = d.speed; throwPlane({ x: S.x, yaw: d.yaw, loft: d.loft, power: d.power }); }
     else { S.pullBack = 0; S.locked = false; const p = planeScreen(); if (d.reason !== 'a tap') sfx('…', p.x, p.y - 60, 1); S.mode = 'start'; hud.showCards(true); previewDots(); } },
 });
-canvas.addEventListener('pointerdown', e => { if (S.mode === 'finish') { startLine(); e.preventDefault(); } });
+canvas.addEventListener('pointerdown', e => { if (levelsOpen || paused) return; if (S.mode === 'finish' || S.mode === 'title') { startLine(); e.preventDefault(); } });
 const keys = {};
 window.addEventListener('keydown', e => {
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; keys[k] = true;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
-  if (k === 'Escape') { if (paused) closePause(); else if (S.mode === 'aim') { gesture.cancel(); } return; }
+  if (k === 'Escape') { if (levelsOpen) closeLevels(); else if (paused) closePause(); else if (S.mode === 'aim') { gesture.cancel(); } return; }
+  if (levelsOpen) return;
   if (k === 'p') { paused ? closePause() : openPause(); return; }
   if (k === 't') { setTwos((twos + 1) % 3); return; }
   if (k === 'h') { hidden = !hidden; hud.hide(hidden); return; }
-  if (S.mode === 'finish' && (k === ' ' || k === 'Enter')) { startLine(); return; }
+  if (k === 'l' && !paused) { openLevels(); return; }
+  if ((S.mode === 'finish' || S.mode === 'title') && (k === ' ' || k === 'Enter')) { startLine(); return; }
   if (S.mode !== 'start' || paused) return;
   const c = cap(); let changed = true;
   if (k === 'ArrowLeft' || k === 'a') S.yaw = Math.max(-G.yaw, S.yaw - 1); else if (k === 'ArrowRight' || k === 'd') S.yaw = Math.min(G.yaw, S.yaw + 1);
@@ -192,23 +233,31 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { const k = e.key.length === 1 ? e.key.toLowerCase() : e.key; keys[k] = false; });
 window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
-/* pause: twos, reset (hold 2 s), the frame rate, storage */
+/* pause: twos, LEVELS, the two resets (hold 2 s; RESET EVERYTHING arms on the first hold and wipes on a second), the frame rate, storage */
 function openPause() { if (paused) return; paused = true; hud.pause(true); document.getElementById('twosBtn').textContent = TWOS_LABELS[twos]; }
-function closePause() { paused = false; hud.pause(false); resetHold = null; document.getElementById('resetBtn').classList.remove('armed'); document.getElementById('resetBtn').querySelector('i').style.width = '0%'; }
-function setTwos(n) { twos = n; engine.twos = twos; kitHud.setTwos(TWOS_LABELS[twos]); document.getElementById('twosBtn').textContent = TWOS_LABELS[twos]; P.twos = twos; if (!NOSAVE) save(P); }
+function closePause() { paused = false; hud.pause(false); for (const h of holds) h.clear(); disarmAll(); }
+function setTwos(n) { twos = n; engine.twos = twos; kitHud.setTwos(TWOS_LABELS[twos]); document.getElementById('twosBtn').textContent = TWOS_LABELS[twos]; SAVE.twos = twos; if (!NOSAVE) save(SAVE); }
 hud.els.pauseBtn.addEventListener('click', () => paused ? closePause() : openPause());
 document.getElementById('resumeBtn').addEventListener('click', closePause);
 document.getElementById('twosBtn').addEventListener('click', () => setTwos((twos + 1) % 3));
-let resetHold = null; const resetBtn = document.getElementById('resetBtn');
-resetBtn.addEventListener('pointerdown', e => { resetHold = performance.now(); resetBtn.classList.add('armed'); e.preventDefault(); });
-for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) resetBtn.addEventListener(ev, () => { resetHold = null; resetBtn.classList.remove('armed'); resetBtn.querySelector('i').style.width = '0%'; });
-function doReset() { Object.assign(P, reset()); S.throws = 0; S.speed = 5.5; placePennant(null); applyPrint(plane, 'napkin'); hud.cash(P.cash); ghost.count = 0; ghost.instanceMatrix.needsUpdate = true; closePause(); startLine(); }
+const holds = [];
+function holdButton(id, ms, onDone) {
+  const btn = document.getElementById(id); const h = { btn, t0: null, clear() { h.t0 = null; btn.classList.remove('armed'); btn.querySelector('i').style.width = '0%'; },
+    tick() { if (h.t0 === null) return; const k = Math.min(1, (performance.now() - h.t0) / ms); btn.querySelector('i').style.width = (k * 100).toFixed(0) + '%'; if (k >= 1) { h.t0 = null; onDone(); } } };
+  btn.addEventListener('pointerdown', e => { h.t0 = performance.now(); btn.classList.add('armed'); e.preventDefault(); });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) btn.addEventListener(ev, () => h.clear());
+  holds.push(h); return h;
+}
+const resetAllBtn = document.getElementById('resetAllBtn'); let armedAll = false;
+function disarmAll() { armedAll = false; resetAllBtn.lastChild.textContent = 'RESET EVERYTHING · HOLD 2 S'; }
+holdButton('resetBtn', 2000, () => { resetLevel(SAVE, levelId); if (!NOSAVE) save(SAVE); location.href = location.pathname + (PEEK ? '?level=' + encodeURIComponent(PEEK) : ''); });
+holdButton('resetAllBtn', 2000, () => { if (!armedAll) { armedAll = true; resetAllBtn.lastChild.textContent = 'ARMED · HOLD AGAIN TO WIPE'; return; } resetAll(); location.href = location.pathname; });
 
 /* ───────────── cameras ───────────── */
 const drone = { pos: new THREE.Vector3(), look: new THREE.Vector3(), init: false, roll: 0, fov: LEVEL.cameras.aim.fov, kick: new THREE.Vector3() };
 function placeCamera(dt, aspect) {
   const D = LEVEL.cameras.drone, A = LEVEL.cameras.aim; let base = A.fov;
-  const aimView = S.mode === 'start' || S.mode === 'aim' || S.mode === 'boot';
+  const aimView = S.mode === 'start' || S.mode === 'aim' || S.mode === 'boot' || S.mode === 'title';
   if (aimView) { const h = handPoint(), d = aimDir(S.yaw, 0); d.y = 0; d.normalize(); const want = h.clone().addScaledVector(d, -A.back).add(new THREE.Vector3(0, A.up, 0)), lookW = h.clone().addScaledVector(d, 2.2).add(new THREE.Vector3(0, -0.12, 0));
     if (!drone.init) { drone.pos.copy(want); drone.look.copy(lookW); drone.init = true; } const k = 1 - Math.exp(-dt * 10); drone.pos.lerp(want, k); drone.look.lerp(lookW, k);
     camera.position.copy(drone.pos); camera.up.set(0, 1, 0); camera.lookAt(drone.look); drone.roll += (0 - drone.roll) * k; camera.rotateZ(drone.roll); base = aspect < 1 ? A.fovPortrait : A.fov; }
@@ -231,8 +280,9 @@ function sfx(text, x, y, step) { if (Q.shot && QS.get('sfx') !== '1') return; hu
 const clock = new SteppedClock();
 function simulateFrame(dt) {
   const t = clock.t, t12 = clock.t12, aspect = (canvas.clientWidth || innerWidth) / (canvas.clientHeight || innerHeight), f = Math.floor(t12 * 12);
-  if (S.mode === 'start' || S.mode === 'aim' || S.mode === 'boot') {
-    poseOnHand(); plane.userData.update(t, t12, 0); if (S.mode === 'start') { const idle = reduce ? 0 : Math.sin(t * 1.4) * 0.006; plane.position.y += idle; hand.position.y += idle; }
+  if (S.mode === 'start' || S.mode === 'aim' || S.mode === 'boot' || S.mode === 'title') {
+    poseOnHand(); plane.userData.update(t, t12, 0); if (S.mode === 'start' || S.mode === 'title') { const idle = reduce ? 0 : Math.sin(t * 1.4) * 0.006; plane.position.y += idle; hand.position.y += idle; }
+    if (S.mode === 'title' && titleT >= 0 && t - titleT > 1.8 && !Q.shot) startLine();
   } else if (S.mode === 'flight') {
     const Pth = S.run.path, dtS = LEVEL.glide.dt; S.tp += dt * TEMPO; const fi = S.tp / dtS, i = Math.min(Pth.length - 2, Math.floor(fi)), fr = Math.min(1, fi - i);
     const a = Pth[i], b = Pth[i + 1]; plane.position.set(a[0] + (b[0] - a[0]) * fr, a[1] + (b[1] - a[1]) * fr, a[2] + (b[2] - a[2]) * fr);
@@ -244,8 +294,8 @@ function simulateFrame(dt) {
     const sq = t12 - squashT; plane.scale.setScalar(LEVEL.plane.scale); if (sq >= 0 && sq < 0.17 && !reduce) plane.scale.y = LEVEL.plane.scale * 0.85;
     plane.userData.update(t, t12, boostNow());
     while (S.fired < S.run.events.length && S.run.events[S.fired].t <= S.tp) fireEvent(S.run.events[S.fired++]);
-    if (S.run.popped && S.tp >= S.run.tPop) { const tau = S.tp - S.run.tPop; toastAt(tau).forEach((s, n) => { const m = slices[n]; if (s.air) { m.visible = true; m.position.set(s.x, s.y, s.z); m.userData.spin = n ? 0.9 : 0.35; }
-      else if (m.visible && !slicesLanded[n]) { slicesLanded[n] = true; const onCounter = s.x > -1.4 && s.x < 1.2 && s.z > LEVEL.place.kitchen + 0.45 && s.z < LEVEL.place.kitchen + 1.45; m.position.set(s.x, (onCounter ? 0.94 : 0) + 0.008, s.z); m.userData.spin = 0; m.rotation.set(Math.PI / 2, 0, 0.4 * n); } }); }
+    if (S.run.popped && S.tp >= S.run.tPop && LEVEL.toast) { const tau = S.tp - S.run.tPop, CTR = LEVEL.toast.counter; toastAt(tau, LEVEL.toast).forEach((s, n) => { const m = slices[n]; if (s.air) { m.visible = true; m.position.set(s.x, s.y, s.z); m.userData.spin = n ? 0.9 : 0.35; }
+      else if (m.visible && !slicesLanded[n]) { slicesLanded[n] = true; const onCounter = CTR && s.x > CTR.x[0] && s.x < CTR.x[1] && s.z > CTR.z[0] && s.z < CTR.z[1]; m.position.set(s.x, (onCounter ? CTR.y : floorAt(s.x, s.z)) + 0.008, s.z); m.userData.spin = 0; m.rotation.set(Math.PI / 2, 0, 0.4 * n); } }); }
     const d = LEVEL.launch.z - plane.position.z; if (d > S.reached) S.reached = d; hud.metres(S.reached);
     while (S.crossed < LEVEL.checkpoints.length && S.reached >= LEVEL.checkpoints[S.crossed].at) cutTo(S.crossed++);
     if (clock.stepped) { if (S.tp < S.sootUntil) soot.userData.burst(plane.position.clone().add(new THREE.Vector3(0, 0.02, 0.15)), t12, 1, 0.2); if (S.tp < S.dripsUntil && f % 3 === 0) drips.userData.burst(plane.position.clone(), t12, 1, 0.4); }
@@ -272,22 +322,23 @@ function adapt(dt) { perf.acc += dt; perf.n++; if (perf.acc < 1) return; const a
   if (Q.shot || Q.dpr || document.hidden) return;
   if (avg > 19 && dpr > 1.0) { dpr = Math.max(1, +(dpr - 0.25).toFixed(2)); perf.good = 0; resize(true); }
   else if (avg < 12 && dpr < dprMax) { if (++perf.good >= 3) { dpr = Math.min(dprMax, +(dpr + 0.25).toFixed(2)); perf.good = 0; resize(true); } } else perf.good = 0; }
-window.__plane = { stats: () => ({ calls: engine.renderer.info.render.calls, triangles: engine.renderer.info.render.triangles, meshes: W.stats.meshes, merged: W.stats.merged, dpr, avgMs: +stats.avgMs.toFixed(1), mode: S.mode, throws: S.throws, cash: P.cash, best: P.best, tempo: TEMPO }), S, P, W, throwLine: L => throwPlane(L) };
+window.__plane = { stats: () => ({ calls: engine.renderer.info.render.calls, triangles: engine.renderer.info.render.triangles, meshes: W.stats.meshes, merged: W.stats.merged, dpr, avgMs: +stats.avgMs.toFixed(1), mode: S.mode, throws: S.throws, cash: P.cash, best: P.best, tempo: TEMPO, level: levelId }), S, P, SAVE, LEVEL, W, level: levelId, throwLine: L => throwPlane(L), openLevels };
 
 /* ───────────── boot ───────────── */
 hud.hide(hidden); if (Q.shot && !Q.hud) hud.hide(true); if (Q.shot) document.body.classList.add('shot');
-startLine();
-if (QS.get('launch')) { const [x, yaw, loft, v] = QS.get('launch').split(',').map(Number); const c = cap(); S.x = Math.min(LEVEL.launch.x[1], Math.max(LEVEL.launch.x[0], x || 0)); const li = Math.max(0, G.lofts.indexOf(loft)); S.loftI = li; S.yaw = yaw || 0; S.speed = Math.min(c, Math.max(G.min, v || 6)); throwPlane({ x: S.x, yaw: S.yaw, loft: G.lofts[li], power: (S.speed - G.min) / (c - G.min) }); }
 const SCREEN = QS.get('screen');
+if (SCREEN === 'title' || (firstEntry && !Q.shot && !SCREEN && !QS.get('launch'))) titleCard(); else startLine();
+if (QS.get('launch')) { const [x, yaw, loft, v] = QS.get('launch').split(',').map(Number); const c = cap(); S.x = Math.min(LEVEL.launch.x[1], Math.max(LEVEL.launch.x[0], x || 0)); const li = Math.max(0, G.lofts.indexOf(loft)); S.loftI = li; S.yaw = yaw || 0; S.speed = Math.min(c, Math.max(G.min, v || 6)); throwPlane({ x: S.x, yaw: S.yaw, loft: G.lofts[li], power: (S.speed - G.min) / (c - G.min) }); }
 if (SCREEN === 'aim') { S.mode = 'aim'; hud.showCards(false); hud.hint(false); S.pullBack = Math.min(0.62, (cap() - G.min) / (G.max - G.min)); S.yaw = -4; S.loftI = 3; S.speed = Math.min(cap(), G.min + (G.max - G.min) * 0.62); S.locked = G.min + (G.max - G.min) * 0.62 > cap(); previewDots(); }
 if (SCREEN === 'pay' || SCREEN === 'finish') { const c = cardNow(P); const fin = SCREEN === 'finish'; throwPlane(fin ? { x: 0, yaw: 5, loft: 14, power: (6.5 - G.min) / (c.cap - G.min) } : { x: 0.6, yaw: 2, loft: 26, power: 1 }); while (S.mode === 'flight') { clock.fixed(1 / 60); simulateFrame(1 / 60); } S.endT = 1; simulateFrame(0); if (fin) finishCard(); }
 if (SCREEN === 'pause') openPause();
+if (SCREEN === 'levels') openLevels();
 if (Q.shot) { const n = Math.round(Q.t * 60); for (let i = 0; i < n; i++) { clock.fixed(1 / 60); simulateFrame(1 / 60); } }
 let shotFrames = 0;
 function frame(now) {
-  if (!Q.shot) { const dt = clock.tick(now); if (!paused) simulateFrame(dt); else { placeCamera(dt, (canvas.clientWidth || innerWidth) / (canvas.clientHeight || innerHeight)); world.tick(clock.t, clock.t12, camera.position); } adapt(dt); }
+  if (!Q.shot) { const dt = clock.tick(now); if (!paused && !levelsOpen) simulateFrame(dt); else { placeCamera(dt, (canvas.clientWidth || innerWidth) / (canvas.clientHeight || innerHeight)); world.tick(clock.t, clock.t12, camera.position); } adapt(dt); }
   if (!(twos === 2 && !clock.stepped && !Q.shot)) { engine.renderer.info.reset(); engine.render(scene, camera, { boost: boostNow(), flash }); }
-  if (resetHold !== null) { const k = Math.min(1, (performance.now() - resetHold) / 2000); resetBtn.querySelector('i').style.width = (k * 100).toFixed(0) + '%'; if (k >= 1) { resetHold = null; doReset(); } }
+  for (const h of holds) h.tick();
   if (Q.shot && ++shotFrames === 4) { document.title = 'SHOT-READY'; return; }
   requestAnimationFrame(frame);
 }

@@ -83,4 +83,14 @@ export const FURN_KIND = new Set(['sofa', 'peninsula', 'baseRun', 'upperRun', 'r
 export const hitOf = kind => HARD_KIND.has(kind) ? 'hard' : FURN_KIND.has(kind) ? 'furniture' : 'soft';
 /* ── pass 6: THE HOUSE, OPENED UP (level/opened.js): the kitchen sideways with three ways out, the laundry, the lanai's two ways out, the streams ── */
 applyPass6(LEVEL, { yard: 'A' });
+scene('pilates').exterior = null;   // pass 6 built the lanai and the yard in the game; the kit's 'lanai' exterior (a hedge, an oak, a fence) stays off
+/* ── pass 7: the level's identity for the level select, the save and the lettering (level/index.js has the order and the price factor) ── */
+Object.assign(LEVEL, { id: 'house', n: 1, name: 'THE HOUSE', finishLine: 'THE HOUSE IN ONE!', toGo: 'TO THE FENCE', next: 'school', priceMul: 1,
+  tagline: 'Through the front door, the kitchen turned sideways, the laundry or the Pilates room, the lanai, the yard and over the pool to the fence line.',
+  paper: [[1, 'NAPKIN', 'napkin'], [5, 'NOTEBOOK PAGE', 'notebook'], [10, 'PAGE ONE', 'pageone'], [15, 'CARDSTOCK', 'cardstock'], [20, 'FOIL', 'foil']],
+  armUnlocks: { 1: 'the living room', 2: 'the kitchen door', 3: 'the Pilates room and the lanai', 4: 'over the pond', 5: 'the deck', 6: 'the pool\'s edge' },
+  skyLook: scene('backyard').look });
+['kitchen', 'pilates', 'backyard', 'backyard'].forEach((k, i) => { LEVEL.checkpoints[i].next = k; });   // the scene whose light the cut brings in
+Object.assign(LEVEL.toast, { id: 'toaster', scene: 'kitchen', eventId: 'kitchen/toaster', color: 'toast', letters: { pop: 'POP!', ting: 'TING!', hit: 'CRUMB!' },
+  counter: { x: [-1.4, 1.2], z: [LEVEL.place.kitchen + 0.45, LEVEL.place.kitchen + 1.45], y: 0.94 } });   // where a slice lands on the counter, not the floor
 export { HOUSE, DERIVED, ENV, RUN };

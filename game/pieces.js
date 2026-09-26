@@ -7,7 +7,7 @@
  * Nothing in kit/ is edited: EXTRA is the game's own table beside PIECE.
  */
 import { THREE, ComicMaterial, canvasTexture, mix, shade, rng, mulberry32 } from '../kit/comic3d.js';
-import { slab, slabB, cushion, rod, drum, ring, puff, cutout, dash, glowDrum, glare, bent, PIECE } from '../kit/parts.js';
+import { slab, slabB, cushion, cushionB, rod, drum, ring, puff, cutout, dash, glowDrum, glare, bent, PIECE } from '../kit/parts.js';
 
 const TAU = Math.PI * 2;
 const unlit = (K, color) => new ComicMaterial({ world: K.world, unlit: true, color, inkWeight: 0, fog: false });
@@ -233,6 +233,72 @@ export const EXTRA = {
       tick(f, t12) { for (const p of items) { if (!p.visible) continue; const dt = t12 - p.userData.t0; if (dt > g.userData.life || dt < 0) { p.visible = false; continue; }
         p.position.addScaledVector(p.userData.v, 1 / 12); p.userData.v.y -= g.userData.gravity / 12; const s = g.userData.grow > 1 ? 1 + dt * g.userData.grow : 1 - dt / g.userData.life * 0.6; p.scale.setScalar(Math.max(0.05, s)); } } };
     return g;
+  },
+  /* ───────────── design pass 7: the greybox pieces of the next levels (each stands in for its plan's card until the pieces card builds it) ───────────── */
+  /** a GREYBOX BLOCK: a chamfered SLAB in the zone's hue for a hard or furniture piece, a CUSHION in a lighter tint for a soft one, a paler SLAB with thin ink for a picture */
+  block(K, p) {
+    const M = K.M, pal = K.pal, g = new THREE.Group(), w = p.w || 0.4, h = Math.max(0.04, p.h || 0.4), d = p.d || 0.3, hue = pal[p.color] || pal.stock;
+    if (p.picture) { const s = slabB(w, h, d, M.furn(mix(hue, pal.stock, 0.5), { hatch: 0.2 }), 0, 0, 0); s.userData.inkMul = 0.6; g.add(s); }
+    else if (p.soft) g.add(cushionB(w, h, d, M.furn(mix(hue, pal.stock, 0.3), { hatch: 0.35 }), 0, 0, 0));
+    else g.add(slabB(w, h, d, M.furn(hue, { hatch: p.hit === 'hard' ? 0.15 : 0.3 }), 0, 0, 0));
+    return g;
+  },
+  /** a GLASS PANE: black glass with a glare in a stock frame (the sliders' rule: BONK) */
+  pane(K, p) {
+    const M = K.M, g = new THREE.Group(), w = p.w || 1, h = p.h || 2, d = Math.max(0.04, p.d || 0.06), fr = M.furn('stock');
+    g.add(slabB(w, h, d, M.blackGlass, 0, 0, 0)); g.add(slab(w + 0.06, 0.05, d + 0.02, fr, 0, h, 0)); g.add(slab(w + 0.06, 0.05, d + 0.02, fr, 0, 0.025, 0));
+    const gl = glare(M, w * 0.7, h * 0.7, 2); gl.position.set(0, h / 2, d / 2 + 0.01); g.add(gl); return g;
+  },
+  /** a STREAM's anchor: a small steel DRUM with a rubber RING where the fan or vent stands; the dashes are the world's instanced stream */
+  stream(K) { const M = K.M, g = new THREE.Group(); g.add(drum(0.12, 0.12, 0.1, M.steel, 0, 0, 0)); g.add(ring(0.1, 0.012, M.rubberObj, 0, 0.1, 0, { rx: Math.PI / 2 })); return g; },
+  /** the SMOKE CLASS of another level: the anchor and nine warm-grey PUFFs drifting along the stream's box on twos (the rotisserie's heat, the fogger's fog) */
+  fog(K, p, r) {
+    const g = EXTRA.stream(K), b = p.boost, m = smokeMat(K), n = 9, dir = new THREE.Vector3(...b.dir).normalize(), puffs = [];
+    const x0 = b.x[0] - p.x, x1 = b.x[1] - p.x, y0 = b.y[0] - (p.y || 0), y1 = b.y[1] - (p.y || 0), z0 = b.z[0] - p.z, z1 = b.z[1] - p.z;   // the box in the anchor's frame
+    const L = Math.abs((x1 - x0) * dir.x) + Math.abs((y1 - y0) * dir.y) + Math.abs((z1 - z0) * dir.z) || 1;
+    for (let i = 0; i < n; i++) { const s = puff(0.1, m, 0, 0, 0, { ico: 1 }); s.userData.o = [rng(r, x0, x1), rng(r, y0, y1), rng(r, z0, z1)]; s.userData.u = i / n; g.add(s); puffs.push(s); }
+    g.userData = { dynamic: true, tick(f) { for (const s of puffs) { const k = (s.userData.u + f * 0.012) % 1, o = s.userData.o; s.position.set(o[0] + dir.x * k * L * 0.5, o[1] + dir.y * k * L * 0.5, o[2] + dir.z * k * L * 0.5); s.scale.setScalar(0.6 + k * 1.2); } } };
+    g.userData.tick(0); return g;
+  },
+  /** the TOASTER CLASS of another level: its block with a GLOW dot that shows once armed and hops at the pop */
+  popper(K, p) {
+    const g = EXTRA.block(K, Object.assign({}, p, { soft: false })), h = Math.max(0.04, p.h || 0.3);
+    const dot = puff(0.03, glowWarm(K), 0, h + 0.05, 0, { noInk: true }); dot.userData.shape = 'GLOW'; dot.visible = false; g.add(dot);
+    g.userData = { dynamic: true, popT: -9, arm(on) { dot.visible = on; }, pop(t12) { g.userData.popT = t12; }, tick(f, t12) { const dt = t12 - g.userData.popT; dot.position.y = h + 0.05 + ((dt >= 0 && dt < 0.5) ? 0.25 : 0); } };
+    return g;
+  },
+  /** a SLICE of another level's pop: the toast's slab in the level's colour (a cola gout, an eraser, dough, a banana, a sheet); tumbles on twos */
+  slice(K, color) {
+    const M = K.M, pal = K.pal, g = new THREE.Group(); g.add(slab(0.11, 0.10, 0.012, M.furn(pal[color] || pal.stock, { hatch: 0.4 }), 0, 0, 0));
+    g.userData = { dynamic: true, spin: 0, tick(f) { g.rotation.x = f * g.userData.spin; g.rotation.z = f * g.userData.spin * 0.6; } }; return g;
+  },
+  /** an EFFECT box (the wet class): three steam PUFFs bobbing in the box on twos; no ink, no collider */
+  effect(K, p, r) {
+    const M = K.M, g = new THREE.Group(), puffs = [];
+    for (let i = 0; i < 3; i++) { const s = puff(0.07 + i * 0.02, M.steam, rng(r, -p.w / 2, p.w / 2), rng(r, 0.1, Math.max(0.2, (p.h || 1) - 0.1)), rng(r, -p.d / 2, p.d / 2), { ico: 1 }); g.add(s); puffs.push(s); }
+    g.userData = { dynamic: true, tick(f) { puffs.forEach((s, i) => { s.position.y += Math.sin((f + i * 4) * 0.5) * 0.004; s.rotation.y = f * 0.1; }); } }; return g;
+  },
+  /** a BELT: a rubber SLAB, flat or a ramp from its near edge to its far edge (the escalator up, the slide down), with stock dashes ticking along it on twos */
+  belt(K, p) {
+    const M = K.M, g = new THREE.Group(), w = p.w || 0.6, d = p.d || 2, c = p.carry || {}, ramp = c.ramp, yN = ramp ? ramp[0] : (p.h || 0.8), yF = ramp ? ramp[1] : (p.h || 0.8);
+    const L = Math.hypot(d, yF - yN), ang = Math.atan2(yF - yN, d);                        // the top face from the near edge (z +d/2) to the far edge (z −d/2)
+    const top = new THREE.Group(); top.position.set(0, (yN + yF) / 2, 0); top.rotation.x = ang; g.add(top);
+    top.add(slab(w, 0.06, L, M.rubberObj, 0, -0.03, 0)); const dashes = [], nd = Math.max(3, Math.round(L / 0.5));
+    for (let i = 0; i < nd; i++) { const s = slab(w - 0.1, 0.012, 0.06, M.furn('stock'), 0, 0.006, 0, { noInk: true }); top.add(s); dashes.push(s); }
+    for (const sz of [-1, 1]) { const y = sz < 0 ? yF : yN; if (y > 0.1) g.add(slabB(w, y - 0.03, 0.08, M.steel, 0, 0, sz * (d / 2 - 0.04))); }   // the legs, or the ramp's ends
+    const spd = c.speed || 0.5;
+    g.userData = { dynamic: true, tick(f) { dashes.forEach((s, i) => { const u = ((i / nd) + (f * spd / 12) / L) % 1; s.position.z = L / 2 - u * L; }); } }; g.userData.tick(0); return g;
+  },
+  /** a HOOP: a tangerine RING facing the run at its height, a stock SLAB backboard behind it, a ROD hanging it from the rafters */
+  hoop(K, p) {
+    const M = K.M, g = new THREE.Group(), r = p.ring.r, y = p.ring.y;
+    g.add(ring(r, 0.02, M.furn('tangerine'), 0, y, 0)); g.add(slab(1.2, 0.9, 0.03, M.furn('stock'), 0, y + 0.35, -r - 0.1)); g.add(rod(0.02, 3.0, M.steel, 0, y + 0.8, -r - 0.1)); return g;
+  },
+  /** a LANDING: a CUSHION in the zone's hue that dips on BOING (the pallet, the bundles) or just sits (the beanbags, the ice mound) */
+  landing(K, p) {
+    const M = K.M, pal = K.pal, g = new THREE.Group(), w = p.w || 3, h = Math.max(0.1, p.h || 0.9), d = p.d || 3;
+    const mat = cushionB(w, h, d, M.furn(pal[p.color] || pal.cobalt, { keyMix: 0.4 }), 0, 0, 0); g.add(mat);
+    g.userData = { dynamic: true, dipT: -9, boing(t12) { g.userData.dipT = t12; }, tick(f, t12) { const dt = t12 - g.userData.dipT; mat.scale.y = (dt >= 0 && dt < 0.25) ? 0.8 : 1; } }; return g;
   },
 };
 /** the kit's prop ids whose builders animate them (never merged) */

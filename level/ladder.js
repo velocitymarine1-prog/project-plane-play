@@ -14,15 +14,16 @@ export const PLANE = { trim: 7.0,
   ratio: L => 5.0 + 0.4 * (L - 1),
   damp: L => L >= 15 ? 1.5 : L >= 10 ? 1.3 : L >= 5 ? 1.1 : 0.9,
   prints: [[1, 'NAPKIN', 'napkin'], [5, 'NOTEBOOK PAGE', 'notebook'], [10, 'PAGE ONE', 'pageone'], [15, 'CARDSTOCK', 'cardstock'], [20, 'FOIL', 'foil']],
-  print: L => { let p = PLANE.prints[0]; for (const q of PLANE.prints) if (L >= q[0]) p = q; return p; },
-  nextPrint: L => PLANE.prints.find(q => q[0] > L) || null };
+  /* a level's paper is its own five names on the same steps (pass 5: PAGE ONE at 10 everywhere); the house's are the default */
+  print: (L, paper = PLANE.prints) => { let p = paper[0]; for (const q of paper) if (L >= q[0]) p = q; return p; },
+  nextPrint: (L, paper = PLANE.prints) => paper.find(q => q[0] > L) || null };
 export const ALLOWANCE = { mult: L => 1 + 0.1 * (L - 1) };
 export const PRICES = { arm: 105, plane: 123, allowance: 88, ratio: 1.32, allowanceRatio: 1.4, flattenAfter: 10, flatRatio: 1.15 };
-/** the price of the NEXT level of a card, given the level held now (L → L + 1) */
-export function priceOf(card, L) {
+/** the price of the NEXT level of a card, given the level held now (L → L + 1); mul = the level's price factor (pass 5: ×1.4 a level) */
+export function priceOf(card, L, mul = 1) {
   const base = PRICES[card], r = card === 'allowance' ? PRICES.allowanceRatio : PRICES.ratio;
   const n = L - 1, steep = Math.min(n, PRICES.flattenAfter), flat = Math.max(0, n - PRICES.flattenAfter);
-  return Math.round(base * Math.pow(r, steep) * Math.pow(PRICES.flatRatio, flat));
+  return Math.round(base * Math.pow(r, steep) * Math.pow(PRICES.flatRatio, flat) * mul);
 }
 export const PAY = { perThrow: 10, perMetre: 1, milestones: [10, 25, 60, 100], finish: 150 };
 /** the card as the sim wants it */

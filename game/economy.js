@@ -1,38 +1,46 @@
-/* game/economy.js — the pay, the cards, the prices · design pass 3 §4.4 (pure) */
-import { LEVEL } from '../level/house.js';
+/* game/economy.js — the pay, the cards, the prices · design pass 3 §4.4 (pure); pass 7: per level
+ * The unit is one flat state: a level's slot { cash, arm, plane, runs, best, milestones, finishes, firstFinishRun } with `allowance` on it
+ * (the save's root, reached through the slot's getter; the harness's freshState() carries it as a plain field). The level supplies its
+ * checkpoints and finish bonus (the milestones pay once per level), its price factor (×1.4 a level, the allowance's card included: it is
+ * bought with the level's cash), its arm cards' unlock text and its paper; the house is the default, so every tool runs unchanged. */
+import { LEVEL as HOUSE } from '../level/house.js';
 import { ARM, PLANE, ALLOWANCE, PAY, priceOf, cardOf } from '../level/ladder.js';
 
-/** a fresh player */
-export const freshState = () => ({ v: 1, cash: 0, arm: 1, plane: 1, allowance: 1, runs: 0, best: null, milestones: LEVEL.checkpoints.map(() => false).concat([false]), finishes: 0, firstFinishRun: null, twos: 1 });
+/** a level's fresh slot */
+export const freshSlot = () => ({ cash: 0, arm: 1, plane: 1, runs: 0, best: null, milestones: [false, false, false, false, false], finishes: 0, firstFinishRun: null });
+/** a fresh player as one flat state (the solver harness's unit): a slot with the allowance and the twos on it */
+export const freshState = () => Object.assign(freshSlot(), { v: 1, allowance: 1, twos: 1 });
 export const cardNow = st => cardOf(st.arm, st.plane);
-/** the pay for one run: distance d (the high-water mark, m), finished or not; mutates the state (cash, milestones, runs, best, finishes) */
-export function settle(st, d, finished, landing) {
+/** the pay for one run: distance d (the high-water mark, m), finished or not; mutates the slot (cash, milestones, runs, best, finishes) */
+export function settle(st, d, finished, landing, level = HOUSE) {
   st.runs++;
   const mult = ALLOWANCE.mult(st.allowance), metres = Math.round(d) * PAY.perMetre;
   const base = Math.round((PAY.perThrow + metres) * mult); let total = base; const firsts = [];
-  LEVEL.checkpoints.forEach((c, i) => { if ((finished || d >= c.at) && !st.milestones[i]) { st.milestones[i] = true; total += c.bonus; firsts.push({ i, text: `${c.first}: +$${c.bonus}` }); } });
-  let finishBonus = 0; if (finished) { st.finishes++; if (st.firstFinishRun === null) st.firstFinishRun = st.runs; if (!st.milestones[LEVEL.checkpoints.length]) { st.milestones[LEVEL.checkpoints.length] = true; finishBonus = LEVEL.finishBonus; total += finishBonus; } }
-  const record = !st.best || d > st.best.d + 1e-9; if (record) st.best = { d: +d.toFixed(2), x: landing ? +landing[0].toFixed(2) : 0, z: landing ? +landing[2].toFixed(2) : LEVEL.launch.z - d, run: st.runs };
+  while (st.milestones.length < level.checkpoints.length + 1) st.milestones.push(false);
+  level.checkpoints.forEach((c, i) => { if ((finished || d >= c.at) && !st.milestones[i]) { st.milestones[i] = true; total += c.bonus; firsts.push({ i, text: `${c.first}: +$${c.bonus}` }); } });
+  let finishBonus = 0; if (finished) { st.finishes++; if (st.firstFinishRun === null) st.firstFinishRun = st.runs; if (!st.milestones[level.checkpoints.length]) { st.milestones[level.checkpoints.length] = true; finishBonus = level.finishBonus; total += finishBonus; } }
+  const record = !st.best || d > st.best.d + 1e-9; if (record) st.best = { d: +d.toFixed(2), x: landing ? +landing[0].toFixed(2) : 0, z: landing ? +landing[2].toFixed(2) : level.launch.z - d, run: st.runs };
   st.cash += total;
   return { d, finished, mult, metres, base, total, firsts, finishBonus, record, perThrow: PAY.perThrow };
 }
-/** the three cards as the start line shows them */
-export function cards(st) {
-  const arm = { key: 'arm', title: 'THE ARM', level: st.arm, maxed: st.arm >= ARM.max, price: st.arm >= ARM.max ? null : priceOf('arm', st.arm),
-    now: `${ARM.cap(st.arm).toFixed(1)} m/s`, next: st.arm >= ARM.max ? 'MAXED' : `${ARM.cap(st.arm).toFixed(1)} → ${ARM.cap(st.arm + 1).toFixed(1)} m/s`, unlock: ARM.unlocks[st.arm + 1] ? 'opens ' + ARM.unlocks[st.arm + 1] : 'more gauge' };
-  const np = PLANE.nextPrint(st.plane);
-  const plane = { key: 'plane', title: 'THE PLANE', level: st.plane, maxed: false, price: priceOf('plane', st.plane),
+/** the three cards as the start line shows them, at the level's prices */
+export function cards(st, level = HOUSE) {
+  const mul = level.priceMul || 1, unlocks = level.armUnlocks || ARM.unlocks, paper = level.paper || PLANE.prints;
+  const arm = { key: 'arm', title: 'THE ARM', level: st.arm, maxed: st.arm >= ARM.max, price: st.arm >= ARM.max ? null : priceOf('arm', st.arm, mul),
+    now: `${ARM.cap(st.arm).toFixed(1)} m/s`, next: st.arm >= ARM.max ? 'MAXED' : `${ARM.cap(st.arm).toFixed(1)} → ${ARM.cap(st.arm + 1).toFixed(1)} m/s`, unlock: unlocks[st.arm + 1] ? 'opens ' + unlocks[st.arm + 1] : 'more gauge' };
+  const np = PLANE.nextPrint(st.plane, paper);
+  const plane = { key: 'plane', title: 'THE PLANE', level: st.plane, maxed: false, price: priceOf('plane', st.plane, mul),
     now: `glide ${PLANE.ratio(st.plane).toFixed(1)}`, next: `glide ${PLANE.ratio(st.plane).toFixed(1)} → ${PLANE.ratio(st.plane + 1).toFixed(1)}`,
-    unlock: (PLANE.damp(st.plane + 1) > PLANE.damp(st.plane) ? 'steadier · ' : '') + (np && np[0] === st.plane + 1 ? `becomes ${np[1]}` : 'about a metre further'), print: PLANE.print(st.plane) };
-  const allowance = { key: 'allowance', title: 'ALLOWANCE', level: st.allowance, maxed: false, price: priceOf('allowance', st.allowance),
-    now: `×${ALLOWANCE.mult(st.allowance).toFixed(1)}`, next: `×${ALLOWANCE.mult(st.allowance).toFixed(1)} → ×${ALLOWANCE.mult(st.allowance + 1).toFixed(1)}`, unlock: 'every throw pays more' };
+    unlock: (PLANE.damp(st.plane + 1) > PLANE.damp(st.plane) ? 'steadier · ' : '') + (np && np[0] === st.plane + 1 ? `becomes ${np[1]}` : 'about a metre further'), print: PLANE.print(st.plane, paper) };
+  const allowance = { key: 'allowance', title: 'ALLOWANCE', level: st.allowance, maxed: false, price: priceOf('allowance', st.allowance, mul),
+    now: `×${ALLOWANCE.mult(st.allowance).toFixed(1)}`, next: `×${ALLOWANCE.mult(st.allowance).toFixed(1)} → ×${ALLOWANCE.mult(st.allowance + 1).toFixed(1)}`, unlock: 'every throw pays more, in every level' };
   for (const c of [arm, plane, allowance]) c.affordable = !c.maxed && st.cash >= c.price;
   return [arm, plane, allowance];
 }
 /** buy a card if affordable; returns what changed or null */
-export function buy(st, key) {
-  const c = cards(st).find(c => c.key === key); if (!c || !c.affordable) return null;
+export function buy(st, key, level = HOUSE) {
+  const c = cards(st, level).find(c => c.key === key); if (!c || !c.affordable) return null;
   st.cash -= c.price; st[key]++;
-  return { key, level: st[key], price: c.price, printChanged: key === 'plane' && PLANE.prints.some(p => p[0] === st.plane) };
+  return { key, level: st[key], price: c.price, printChanged: key === 'plane' && (level.paper || PLANE.prints).some(p => p[0] === st.plane) };
 }
 export { ARM, PLANE, ALLOWANCE, PAY, priceOf, cardOf };

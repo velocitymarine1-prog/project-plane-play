@@ -8,14 +8,14 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Project Plane">
-<meta name="description" content="Project Plane: throw a paper plane through a comic-book house. Every throw pays. Buy a better arm and a better plane until the house falls in one throw.">
+<meta name="description" content="Project Plane: throw a paper plane through a comic-book house, a school, a grocery store, a mall, a zoo and a factory. Every throw pays. Buy a better arm and a better plane until the place falls in one throw.">
 <title>Project Plane</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23ef4c95' stroke='%2330210a' stroke-width='4'/%3E%3Ctext x='32' y='45' font-family='Impact,Arial Black,sans-serif' font-size='38' text-anchor='middle' fill='%23fdf8ee' stroke='%2330210a' stroke-width='2'%3E1%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@400;700&display=swap">
 <style>
-  /* PROJECT PLANE · level 1: THE HOUSE IN ONE. The frame is the kit's; the lettering is DOM on top of it (the style book's rules). */
+  /* PROJECT PLANE · the six levels. The frame is the kit's; the lettering is DOM on top of it (the style book's rules). */
   :root { --ink:#30210a; --paper:#fdf8ee; --stock:#fff1d6; --accent:#ef4c95; --cap:#ffd23f; --cyan:#2bb3e6; --cobalt:#2f5fd0; --bg:#e9f4f8; --lock:#c9bfae; --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px); color-scheme: light; }
   html, body { height: 100%; }
   [hidden] { display: none !important; }
@@ -51,10 +51,33 @@
   .panel b { display: block; font: 400 30px/1.05 Bangers, Impact, "Arial Black", sans-serif; letter-spacing: .04em; margin-bottom: 6px; }
   .panel .line { display: block; font: 700 13px/1.35 "Comic Neue", "Trebuchet MS", Arial, sans-serif; text-transform: uppercase; letter-spacing: .04em; }
   .panel .first { color: var(--cobalt); } .panel .rec { color: var(--accent); -webkit-text-stroke: 1px var(--ink); paint-order: stroke fill; font-family: Bangers, Impact, sans-serif; font-size: 20px; font-weight: 400; }
-  .panel .tap { margin-top: 8px; font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .08em; opacity: .8; }
+  .panel .tap { margin-top: 8px; font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .08em; opacity: .8; display: block; }
+  .panel .next { display: inline-block; margin: 10px 0 2px; background: var(--accent); color: var(--paper); -webkit-text-stroke: 0; }
   .hint { position: absolute; left: 50%; top: 31%; transform: translate(-50%, -50%) rotate(1deg); background: var(--paper); border: 3px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); padding: 12px 16px; text-align: center; font: 700 12px/1.4 "Comic Neue", "Trebuchet MS", Arial, sans-serif; text-transform: uppercase; letter-spacing: .05em; max-width: 78vw; }
   .hint b { display: block; font: 400 22px/1.05 Bangers, Impact, "Arial Black", sans-serif; letter-spacing: .04em; margin-bottom: 4px; }
-  .hint .folio { display: inline-block; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); border: 2px solid var(--ink); color: var(--paper); font: 400 18px/26px Bangers, Impact, sans-serif; -webkit-text-stroke: 1px var(--ink); paint-order: stroke fill; margin-top: 6px; }
+  .hint .folio, .title .folio { display: inline-block; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); border: 2px solid var(--ink); color: var(--paper); font: 400 18px/26px Bangers, Impact, sans-serif; -webkit-text-stroke: 1px var(--ink); paint-order: stroke fill; margin-top: 6px; }
+  /* the title card of a level (pass 7): its number, its name, its tagline, the roundel; a tap or 1.8 s takes it away */
+  .title { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%) rotate(-1deg); background: var(--stock); border: 3px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); padding: 16px 22px 14px; text-align: center; width: min(78vw, 420px); pointer-events: auto; }
+  .title .n, .lvl .n { display: block; font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .12em; color: #6b5d4a; }
+  .title b { display: block; font: 400 clamp(30px, 9vw, 44px)/1.02 Bangers, Impact, "Arial Black", sans-serif; letter-spacing: .04em; margin: 6px 0 8px; color: var(--accent); -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; text-shadow: 3px 3px 0 var(--ink); text-wrap: balance; }
+  .title .tag, .lvl .tag { display: block; font: 700 12px/1.4 "Comic Neue", "Trebuchet MS", Arial, sans-serif; letter-spacing: .02em; }
+  /* the level select (pass 7): six stock cards in a strip that scrolls sideways with snap */
+  .levels { position: absolute; inset: 0; background: rgba(48, 33, 10, .6); display: grid; place-items: center; pointer-events: auto; }
+  .levels .box { background: var(--paper); border: 3px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); padding: 16px 0 14px; width: min(94vw, 720px); display: flex; flex-direction: column; gap: 12px; }
+  .levels h2 { margin: 0 20px; font: 400 32px/1 Bangers, Impact, "Arial Black", sans-serif; letter-spacing: .04em; }
+  .levels .row { display: flex; gap: 8px; margin: 0 20px; } .levels .row button { flex: 1 1 auto; }
+  .levels p { margin: 0 20px; font: 700 11px/1.45 ui-monospace, Menlo, monospace; letter-spacing: .03em; color: #6b5d4a; }
+  .strip { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 6px 20px 10px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .strip::-webkit-scrollbar { display: none; }
+  .lvl { flex: 0 0 200px; scroll-snap-align: center; text-align: left !important; display: flex; flex-direction: column; gap: 6px; padding: 12px 12px 10px !important; background: var(--stock) !important; min-height: 150px; }
+  .lvl b { font: 400 22px/1.02 Bangers, Impact, "Arial Black", sans-serif; letter-spacing: .04em; text-wrap: balance; }
+  .lvl .tag { flex: 1 1 auto; font-size: 11px; color: #6b5d4a; }
+  .lvl .st { font: 700 10px/1.3 ui-monospace, Menlo, monospace; letter-spacing: .06em; color: var(--cobalt); }
+  .lvl.locked { background: #e6dccb !important; color: #6b5d4a; box-shadow: 2px 2px 0 var(--lock) !important; border-color: var(--lock) !important; } .lvl.locked .st { color: #a09480; }
+  .lvl.done .st { color: var(--accent); }
+  .lvl.current { border-color: var(--accent) !important; box-shadow: 3px 3px 0 var(--accent) !important; }
+  .lvl.shake { animation: shake .35s; }
+  @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
   .pauseMenu { position: absolute; inset: 0; background: rgba(48, 33, 10, .55); display: grid; place-items: center; pointer-events: auto; }
   .pauseMenu .box { background: var(--paper); border: 3px solid var(--ink); box-shadow: 6px 6px 0 var(--ink); padding: 18px 20px; width: min(86vw, 380px); display: flex; flex-direction: column; gap: 10px; }
   .pauseMenu h2 { margin: 0 0 4px; font: 400 32px/1 Bangers, Impact, "Arial Black", sans-serif; letter-spacing: .04em; }
@@ -62,14 +85,14 @@
   .pauseMenu .row button { flex: 1 1 auto; }
   .pauseMenu p { margin: 0; font: 700 11px/1.45 ui-monospace, Menlo, monospace; letter-spacing: .03em; color: #6b5d4a; }
   .pauseMenu .note { color: var(--cobalt); }
-  #resetBtn { position: relative; overflow: hidden; } #resetBtn i { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: var(--accent); opacity: .5; }
-  #resetBtn.armed { background: var(--accent); color: var(--paper); }
+  .hold { position: relative; overflow: hidden; } .hold i { position: absolute; left: 0; top: 0; bottom: 0; width: 0%; background: var(--accent); opacity: .5; }
+  .hold.armed { background: var(--accent); color: var(--paper); }
   .hide #ui, .hide .c3d-root { display: none; }
   .cashTag.off, .cards.off { pointer-events: none; }
-  @media (max-width: 600px) { #ui button { font-size: 14px; padding: 6px 8px; } .slot.flight { font-size: 30px; } #pauseBtn { top: calc(16px + var(--sat)); width: 36px; height: 36px; } .card b { font-size: 15px; } .card .price { width: 50px; height: 50px; } .card .price span { font-size: 11px; } .panel b { font-size: 24px; } .cashTag { font-size: 18px; bottom: calc(190px + var(--sab)); } }
+  @media (max-width: 600px) { #ui button { font-size: 14px; padding: 6px 8px; } .slot.flight { font-size: 30px; } #pauseBtn { top: calc(16px + var(--sat)); width: 36px; height: 36px; } .card b { font-size: 15px; } .card .price { width: 50px; height: 50px; } .card .price span { font-size: 11px; } .panel b { font-size: 24px; } .cashTag { font-size: 18px; bottom: calc(190px + var(--sab)); } .lvl { flex-basis: 176px; } }
   @media (max-height: 640px) { .cards { bottom: calc(30px + var(--sab)); } .cashTag { bottom: calc(170px + var(--sab)); } }
-  @media (prefers-reduced-motion: reduce) { .cards, .cashTag { transition: none; } }
-  body.shot .cards, body.shot .cashTag, body.shot .c3d-sfx { transition: none; animation: none; }   /* proof frames: nothing in motion in the DOM */
+  @media (prefers-reduced-motion: reduce) { .cards, .cashTag { transition: none; } .lvl.shake { animation: none; } .strip { scroll-behavior: auto; } }
+  body.shot .cards, body.shot .cashTag, body.shot .c3d-sfx, body.shot .lvl { transition: none; animation: none; }   /* proof frames: nothing in motion in the DOM */
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}</script>
 </head>
@@ -82,11 +105,18 @@
   <div class="cards off" id="cards"></div>
   <div class="panel" id="panel" hidden></div>
   <div class="hint" id="hint" hidden><b>DRAG THE PLANE BACK</b>then swipe forward to throw<br><span class="folio">1</span></div>
+  <div class="title" id="title" hidden></div>
+  <div class="levels" id="levels" hidden><div class="box" role="dialog" aria-label="The levels"><h2>THE LEVELS</h2>
+    <div class="strip" id="levelStrip"></div>
+    <div class="row"><button type="button" id="levelsClose">CLOSE</button></div>
+    <p>A level is a fresh run of the same three cards. ALLOWANCE carries. Finish a level to open the next.</p>
+  </div></div>
   <div class="pauseMenu" id="pause" hidden><div class="box" role="dialog" aria-label="Paused"><h2>PAUSED</h2>
-    <div class="row"><button type="button" id="resumeBtn">RESUME</button><button type="button" id="twosBtn">ON TWOS</button></div>
-    <div class="row"><button type="button" id="resetBtn" aria-label="Reset progress: hold for two seconds"><i></i>RESET PROGRESS · HOLD 2 S</button></div>
+    <div class="row"><button type="button" id="resumeBtn">RESUME</button><button type="button" id="twosBtn">ON TWOS</button><button type="button" id="levelsBtn">LEVELS</button></div>
+    <div class="row"><button type="button" id="resetBtn" class="hold" aria-label="Reset this level: hold for two seconds"><i></i>RESET THIS LEVEL · HOLD 2 S</button></div>
+    <div class="row"><button type="button" id="resetAllBtn" class="hold" aria-label="Reset everything: hold for two seconds, twice"><i></i>RESET EVERYTHING · HOLD 2 S</button></div>
     <p id="fps">…</p><p id="storageNote" class="note" hidden></p>
-    <p>PROJECT PLANE · level 1 · THE HOUSE IN ONE · design passes 1–3 and 6 · the COMIC 3D house style at 0.4 · keys: ← → yaw · ↑ ↓ power · Q E step · 1–5 loft · space throws · R retries · T twos · H hides · P pauses</p>
+    <p id="pauseInfo">PROJECT PLANE · keys: ← → yaw · ↑ ↓ power · Q E step · 1–5 loft · space throws · R retries · T twos · H hides · P pauses</p>
   </div></div>
 </div>
 <script type="module" src="game/main.js"></script>

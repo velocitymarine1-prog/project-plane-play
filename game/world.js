@@ -1,12 +1,13 @@
-/* game/world.js — THE HOUSE in one scene: the four rooms from the kit's builder, the game's pieces beside them, the sky, the cutaway,
- * the static merge (a phone's draw calls) and the room culling · design pass 4 §3.7, §3.9
+/* game/world.js — a level in one scene: its rooms from the kit's builder, the game's pieces beside them, the sky, the cutaway, the static
+ * merge (a phone's draw calls) and the room culling · design pass 4 §3.7, §3.9; pass 7: any level (the house or a greybox level)
  *
- *   const W = buildWorld(world, { hullMat, seed }) → { scene, rooms, extras, kits, textures, mats, hullMat, tick(t, t12, stepped), cull(camZ), stats }
- * The kit's buildScene gets each scene without the kinds it does not know (and without the pool, which the game draws); nothing in kit/ changes.
+ *   const W = buildWorld(world, LEVEL, { hullMat, seed }) → { scene, rooms, extras, kits, textures, mats, hullMat, tick(t, t12, stepped), cull(camZ), stats }
+ * The kit's buildScene gets each scene without the kinds it does not know (and without the house's pool, which the game draws); nothing in kit/ changes.
  */
 import { THREE, HullMaterial, skyDome, inkAll, mulberry32, rng } from '../kit/comic3d.js';
 import { buildScene, makeTextures, makeMats } from '../kit/interior.js';
 import { PIECE } from '../kit/parts.js';
+import { EXTRA, KIT_DYNAMIC } from './pieces.js';
 
 /** a stream's dashes as ONE instanced mesh (the kit's windDashes draws a mesh per dash; ten streams cost the phone two hundred draw calls).
  *  The kit's numbers: 12–40 dashes scrolling along the box's direction on twos, steam dashes shorter and greyer. */
@@ -22,10 +23,8 @@ function instancedWind(K, w, r, id) {
   im.userData.tick = f => { for (let i = 0; i < n; i++) { const d = o[i], u = (d[3] + f * 0.18) % L; pos.set(d[0] + dir.x * (u - d[3]), d[1] + dir.y * (u - d[3]), d[2] + dir.z * (u - d[3])); if (!inside(pos)) pos.set(d[0], d[1], d[2]); m.compose(pos, q, sc); im.setMatrixAt(i, m); } im.instanceMatrix.needsUpdate = true; };
   im.userData.tick(0); return im;
 }
-import { LEVEL } from '../level/house.js';
-import { EXTRA, KIT_DYNAMIC } from './pieces.js';
 
-/** the scene as the kit can build it: the kinds it knows, the pool left out (the game draws it) */
+/** the scene as the kit can build it: the kinds it knows, the house's pool left out (the game draws it) */
 function kitScene(sc) {
   return Object.assign({}, sc, { props: sc.props.filter(p => PIECE[p.kind] && !p.picture), floors: sc.floors.filter(f => f.id !== 'pool') });
 }
@@ -82,20 +81,20 @@ function mergeStatic(room) {
   return { before, after };
 }
 
-export function buildWorld(world, o = {}) {
+export function buildWorld(world, LEVEL, o = {}) {
   const scene = new THREE.Scene();
-  const yardLook = LEVEL.scenes.find(s => s.key === 'backyard').look;
-  scene.add(skyDome(world, { bands: yardLook.sky, edges: yardLook.skyEdges, bandW: 0.03 }));
+  const skyLook = LEVEL.skyLook || (LEVEL.scenes.find(s => s.key === 'backyard') || LEVEL.scenes[LEVEL.scenes.length - 1]).look;
+  scene.add(skyDome(world, { bands: skyLook.sky, edges: skyLook.skyEdges, bandW: 0.03 }));
   const textures = makeTextures(), mats = makeMats(world, textures), hullMat = o.hullMat || new HullMaterial({ world });
   const rooms = {}, extras = {}, kits = {}, dyn = []; const stats = { merged: {}, meshes: 0 };
   for (const sc of LEVEL.scenes) {
     const r = mulberry32((o.seed ?? 7) * 101 + sc.n + 40);
-    const g = buildScene(world, kitScene(sc), { hullMat, textures, mats, seed: o.seed, sky: false, exterior: sc.key !== 'pilates' });
+    const g = buildScene(world, kitScene(sc), { hullMat, textures, mats, seed: o.seed, sky: false });
     g.position.z = LEVEL.place[sc.key]; rooms[sc.key] = g; scene.add(g); const K = g.userData.kit; kits[sc.key] = K;
     const props = g.children.find(c => c.name === 'props');
     const place = (piece, x, y, z, ry = 0) => { piece.position.set(x, y, z); piece.rotation.y = ry; inkAll(piece, hullMat, 500 + sc.n * 50 + props.children.length); props.add(piece); dyn.push(piece); return piece; };
     for (const p of sc.props) {
-      if (p.kind === 'smoke') { extras[p.id] = place(EXTRA.ovenSmoke(K, p, r), p.x, p.y, p.z); continue; }
+      if (p.kind === 'smoke') { extras[p.id] = place(EXTRA.ovenSmoke(K, p, r), p.x, p.y, p.z); continue; }   // the house's oven smoke follows its own curve
       const make = EXTRA[p.kind]; if (!make) continue;
       extras[p.id] = place(make(K, p, r), p.x, p.y ?? 0, p.z, p.ry || 0);
       if (p.boost && p.boost.accel) { const wd = instancedWind(K, p.boost, r, p.id); g.add(wd); dyn.push(wd); }   // the game's own pieces draw their streams
@@ -103,8 +102,8 @@ export function buildWorld(world, o = {}) {
     for (const wd of g.children.filter(c => c.name.startsWith('wind-'))) {   // the kit's streams (a mesh per dash) become one instanced mesh each
       if (wd.isInstancedMesh) continue; const p = sc.props.find(q => 'wind-' + q.id === wd.name); if (!p || !p.boost) continue;
       g.remove(wd); wd.traverse(o2 => { if (o2.isMesh && o2.geometry) o2.geometry.dispose(); }); const im = instancedWind(K, p.boost, r, p.id); g.add(im); dyn.push(im); }
-    if (sc.key === 'kitchen') { const range = sc.props.find(p => p.id === 'range'); extras['oven door'] = place(EXTRA.ovenDoor(K, range), range.x, 0, range.z); }
-    if (sc.key === 'backyard') { const pool = sc.floors.find(f => f.id === 'pool'); extras.pool = place(EXTRA.pool(K, pool, r), 0, 0, 0); }
+    for (const range of sc.props.filter(p => p.oven)) extras['oven door'] = place(EXTRA.ovenDoor(K, range), range.x, 0, range.z);   // the house's open oven
+    const pool = sc.floors.find(f => f.id === 'pool'); if (pool) extras.pool = place(EXTRA.pool(K, pool, r), 0, 0, 0);            // the house's pool (the game draws it)
     if (!o.noMerge) stats.merged[sc.key] = mergeStatic(g);
     g.userData.zRange = [LEVEL.place[sc.key] + Math.min(...sc.floors.map(f => f.z[0])), LEVEL.place[sc.key] + Math.max(...sc.floors.map(f => f.z[1]))];
   }
